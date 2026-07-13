@@ -1,0 +1,20 @@
+{
+  "name": "hotbox-server",
+  "version": "0.1.0",
+  "description": "Hotbox WS backend — §5 wire-protocol",
+  "type": "module",
+  "scripts": {
+    "start": "node --loader ts-node/esm ws-server.ts",
+    "build": "tsc",
+    "start:prod": "node dist/ws-server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.0.0"
+  }
+}
