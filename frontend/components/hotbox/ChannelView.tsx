@@ -194,7 +194,7 @@ export function ChannelView({ channelId, isDm }: Props) {
             <span className="text-xs text-[var(--hotbox-text-muted)] truncate">{channel.topic}</span>
           </>
         )}
-        <div className="ml-auto text-xs text-[var(--hotbox-text-dim)]">
+        <div data-testid="member-count" className="ml-auto text-xs text-[var(--hotbox-text-dim)]">
           {channel?.members.length ?? 0} members
         </div>
       </div>

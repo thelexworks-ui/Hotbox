@@ -28,7 +28,7 @@ function KeystoreLoadingScreen() {
       className="flex items-center justify-center h-screen gap-3"
       style={{ background: 'var(--hotbox-bg)', color: 'var(--hotbox-text-dim)' }}
     >
-      <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+      <span data-testid="keystore-spinner" className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
       <span className="text-sm">Initialising secure keystore…</span>
     </div>
   );
@@ -83,6 +83,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <WsStatusBar />
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <aside
+          data-testid="sidebar"
           className="hidden md:flex flex-col flex-shrink-0 w-60 border-r border-[var(--hotbox-border)]"
           style={{ background: 'var(--hotbox-surface)' }}
         >

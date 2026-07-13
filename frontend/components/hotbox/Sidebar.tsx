@@ -122,7 +122,7 @@ export function Sidebar() {
     >
       {/* Workspace header */}
       <div className="px-4 py-2 mb-2 flex items-center justify-between border-b border-[var(--hotbox-border)]">
-        <span className="font-semibold text-sm text-[var(--hotbox-text)] truncate">{WORKSPACE_NAME}</span>
+        <span data-testid="workspace-label" className="font-semibold text-sm text-[var(--hotbox-text)] truncate">{WORKSPACE_NAME}</span>
       </div>
 
       <ChannelGroup label="Agents"   channels={agents} />
