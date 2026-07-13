@@ -179,10 +179,11 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
       wrapKey,
       { name: 'AES-GCM', iv: b64ToBytes(bundle.wiv) },
       { name: 'AES-GCM', length: 256 },
-      false,
+      true,
       ['encrypt', 'decrypt'],
     );
 
+    const ckBytes = await crypto.subtle.exportKey('raw', ck);
     await (db as IDBPDatabase<HotboxDBSchema>).put('chat-keys', { id: chatId, ckBytes, cached_at: new Date().toISOString() });
 
     return crypto.subtle.importKey('raw', ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
