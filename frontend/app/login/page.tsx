@@ -7,7 +7,7 @@ const WORKSPACE = process.env.NEXT_PUBLIC_HOTBOX_WORKSPACE_NAME || 'Optimus';
 
 function LoginForm() {
   const searchParams = useSearchParams();
-  const [code, setCode] = useState(searchParams.get('code') ?? '');
+  const [code, setCode] = useState(searchParams.get('code') ?? 'HOTBOXBETA');
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -59,7 +59,7 @@ function LoginForm() {
               type="text"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="HOTBOXBETA"
+              placeholder="Invite code"
               autoComplete="off"
               required
               style={{ background: 'var(--hotbox-surface-2)', border: '1px solid var(--hotbox-border)', borderRadius: 6, padding: '8px 10px', fontSize: 14, color: 'var(--hotbox-text)', outline: 'none', fontFamily: 'monospace', letterSpacing: '0.05em', width: '100%', boxSizing: 'border-box' }}
