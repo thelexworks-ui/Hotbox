@@ -27,10 +27,13 @@ interface HotboxDBSchema {
 }
 
 async function openHotboxDB(org: string): Promise<IDBPDatabase> {
-  return openDB(`hotbox-${org}`, 1, {
-    upgrade(db) {
-      if (!db.objectStoreNames.contains('keypairs'))  db.createObjectStore('keypairs', { keyPath: 'id' });
-      if (!db.objectStoreNames.contains('chat-keys')) db.createObjectStore('chat-keys', { keyPath: 'id' });
+  return openDB(`hotbox-${org}`, 2, {
+    upgrade(db, oldVersion) {
+      // v1→v2: drop+recreate both stores to fix stale schema on existing IDB instances.
+      if (db.objectStoreNames.contains("keypairs"))  db.deleteObjectStore("keypairs");
+      if (db.objectStoreNames.contains("chat-keys")) db.deleteObjectStore("chat-keys");
+      db.createObjectStore("keypairs",  { keyPath: "id" });
+      db.createObjectStore("chat-keys", { keyPath: "id" });
     },
   });
 }
