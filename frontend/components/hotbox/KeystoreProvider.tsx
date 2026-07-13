@@ -22,12 +22,12 @@ function bytesToB64(buf: Uint8Array | ArrayBuffer): string {
 }
 
 interface HotboxDBSchema {
-  keypairs: { key: string; value: { id: string; publicKey: CryptoKey; privateKey: CryptoKey } };
-  'chat-keys': { key: string; value: { id: string; ck: CryptoKey; cached_at: string } };
+  keypairs: { key: string; value: { id: string; publicKeyJwk: JsonWebKey; privateKeyJwk: JsonWebKey } };
+  'chat-keys': { key: string; value: { id: string; ckBytes: ArrayBuffer; cached_at: string } };
 }
 
 async function openHotboxDB(org: string): Promise<IDBPDatabase> {
-  return openDB(`hotbox-${org}`, 2, {
+  return openDB(`hotbox-${org}`, 3, {
     upgrade(db, oldVersion) {
       // v1→v2: drop+recreate both stores to fix stale schema on existing IDB instances.
       if (db.objectStoreNames.contains("keypairs"))  db.deleteObjectStore("keypairs");
@@ -97,18 +97,23 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
       dbRef.current = db;
 
       const safeId = memberId || 'user:local';
-      let existing = await (db as IDBPDatabase<HotboxDBSchema>).get('keypairs', safeId);
+      const existing = await (db as IDBPDatabase<HotboxDBSchema>).get('keypairs', safeId);
+
+      let pubKey: CryptoKey;
+      let privKey: CryptoKey;
 
       if (!existing) {
         const kp = await crypto.subtle.generateKey(
           { name: 'X25519' },
-          false,
+          true,
           ['deriveKey', 'deriveBits'],
         ) as CryptoKeyPair;
 
-        const pubKeyRaw = await crypto.subtle.exportKey('raw', kp.publicKey);
-        existing = { id: safeId, publicKey: kp.publicKey, privateKey: kp.privateKey };
-        await (db as IDBPDatabase<HotboxDBSchema>).put('keypairs', existing);
+        const pubKeyJwk  = await crypto.subtle.exportKey('jwk', kp.publicKey);
+        const privKeyJwk = await crypto.subtle.exportKey('jwk', kp.privateKey);
+        const pubKeyRaw  = await crypto.subtle.exportKey('raw', kp.publicKey);
+
+        await (db as IDBPDatabase<HotboxDBSchema>).put('keypairs', { id: safeId, publicKeyJwk: pubKeyJwk, privateKeyJwk: privKeyJwk });
 
         try {
           await fetch('/api/hotbox/keys', {
@@ -116,12 +121,18 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ memberId, publicKey: bytesToB64(new Uint8Array(pubKeyRaw)) }),
           });
-        } catch { /* non-fatal — key registered on next load */ }
+        } catch { /* non-fatal */ }
+
+        pubKey  = await crypto.subtle.importKey('jwk', pubKeyJwk,  { name: 'X25519' }, false, []);
+        privKey = await crypto.subtle.importKey('jwk', privKeyJwk, { name: 'X25519' }, false, ['deriveKey', 'deriveBits']);
+      } else {
+        pubKey  = await crypto.subtle.importKey('jwk', existing.publicKeyJwk,  { name: 'X25519' }, false, []);
+        privKey = await crypto.subtle.importKey('jwk', existing.privateKeyJwk, { name: 'X25519' }, false, ['deriveKey', 'deriveBits']);
       }
 
       if (cancelled) return;
-      privateKeyRef.current = existing.privateKey;
-      setMyPublicKey(existing.publicKey);
+      privateKeyRef.current = privKey;
+      setMyPublicKey(pubKey);
       setReady(true);
     })().catch((err) => {
       if (!cancelled) setInitError(err instanceof Error ? err.message : 'Keystore init failed');
@@ -172,8 +183,9 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
       ['encrypt', 'decrypt'],
     );
 
-    await (db as IDBPDatabase<HotboxDBSchema>).put('chat-keys', { id: chatId, ck, cached_at: new Date().toISOString() });
-    return ck;
+    await (db as IDBPDatabase<HotboxDBSchema>).put('chat-keys', { id: chatId, ckBytes, cached_at: new Date().toISOString() });
+
+    return crypto.subtle.importKey('raw', ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
   }, []);
 
   // ---------- Internal: get or derive CK for a chat ----------
@@ -181,7 +193,9 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
   const getCK = useCallback(async (chatId: string): Promise<CryptoKey> => {
     const db = dbRef.current!;
     const cached = await (db as IDBPDatabase<HotboxDBSchema>).get('chat-keys', chatId);
-    if (cached) return cached.ck;
+    if (cached) {
+      return crypto.subtle.importKey('raw', cached.ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+    }
 
     const useOrch = orchestratorMode && orchestratorPrivateKeyRef.current !== null;
     const activePrivateKey = useOrch ? orchestratorPrivateKeyRef.current! : privateKeyRef.current!;
@@ -294,8 +308,9 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
-    // Cache CK for the creator immediately — avoid self-round-trip
-    await (db as IDBPDatabase<HotboxDBSchema>).put('chat-keys', { id: chatId, ck, cached_at: new Date().toISOString() });
+    // ck is extractable; export raw bytes for IDB (Safari compat).
+    const ckBytes = await crypto.subtle.exportKey('raw', ck);
+    await (db as IDBPDatabase<HotboxDBSchema>).put('chat-keys', { id: chatId, ckBytes, cached_at: new Date().toISOString() });
   }, []);
 
   // ---------- Exposed: loadOrchestratorKey — enable Lex's full-org read mode ----------
