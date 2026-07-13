@@ -10,7 +10,7 @@ interface AuthContext {
 
 const Ctx = createContext<AuthContext>({
   memberId: 'user:local',
-  org: process.env.NEXT_PUBLIC_HOTBOX_ORG ?? 'toadsage',
+  org: process.env.NEXT_PUBLIC_HOTBOX_ORG || 'toadsage',
   ready: false,
 });
 
@@ -21,7 +21,7 @@ export function useAuth(): AuthContext {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [auth, setAuth] = useState<AuthContext>({
     memberId: 'user:local',
-    org: process.env.NEXT_PUBLIC_HOTBOX_ORG ?? 'toadsage',
+    org: process.env.NEXT_PUBLIC_HOTBOX_ORG || 'toadsage',
     ready: false,
   });
 

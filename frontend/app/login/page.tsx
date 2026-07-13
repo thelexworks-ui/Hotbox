@@ -3,7 +3,7 @@
 import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-const WORKSPACE = process.env.NEXT_PUBLIC_HOTBOX_WORKSPACE_NAME ?? 'Optimus';
+const WORKSPACE = process.env.NEXT_PUBLIC_HOTBOX_WORKSPACE_NAME || 'Optimus';
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -44,7 +44,7 @@ function LoginForm() {
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--hotbox-bg)' }}>
       <div style={{ width: '100%', maxWidth: 360, background: 'var(--hotbox-surface)', border: '1px solid var(--hotbox-border)', borderRadius: 12, padding: '2rem' }}>
         <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4, color: 'var(--hotbox-text)' }}>
-          Join {WORKSPACE}
+          Join {WORKSPACE} on Hotbox
         </h1>
         <p style={{ fontSize: 13, color: 'var(--hotbox-text-muted)', marginBottom: 24 }}>
           Enter your invite code and pick a display name.

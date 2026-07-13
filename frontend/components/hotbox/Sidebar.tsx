@@ -6,8 +6,8 @@ import { usePathname } from 'next/navigation';
 import { useHotboxStore, type ChannelMeta, type PresenceStatus } from '@/store/hotbox';
 import { useWs } from './WsProvider';
 
-const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG ?? 'toadsage';
-const WORKSPACE_NAME = process.env.NEXT_PUBLIC_HOTBOX_WORKSPACE_NAME ?? ORG;
+const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG || 'toadsage';
+const WORKSPACE_NAME = process.env.NEXT_PUBLIC_HOTBOX_WORKSPACE_NAME || ORG;
 
 function PresenceDot({ status }: { status: PresenceStatus }) {
   const color =

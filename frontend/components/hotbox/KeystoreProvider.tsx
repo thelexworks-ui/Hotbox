@@ -5,7 +5,7 @@ import { openDB, type IDBPDatabase } from 'idb';
 import type { AegisEnvelope, WrappedKeyBundle } from '@/lib/hotbox/types';
 import { useAuth } from './AuthProvider';
 
-const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG ?? 'toadsage';
+const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG || 'toadsage';
 
 function b64ToBytes(b64: string): ArrayBuffer {
   const bin = atob(b64);

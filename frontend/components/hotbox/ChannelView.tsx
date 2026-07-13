@@ -9,7 +9,7 @@ import { useKeystore } from './KeystoreProvider';
 import { Composer } from './Composer';
 import type { AnyMessage, HotboxMessage, ServerMessage } from '@/lib/hotbox/types';
 
-const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG ?? 'toadsage';
+const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG || 'toadsage';
 
 const EMPTY_MESSAGES: AnyMessage[] = [];
 const EMPTY_TYPING: string[] = [];

@@ -7,7 +7,7 @@ import { useAuth } from './AuthProvider';
 import { useHotboxStore } from '@/store/hotbox';
 import type { HotboxMessage, ServerMessage } from '@/lib/hotbox/types';
 
-const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG ?? 'toadsage';
+const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG || 'toadsage';
 
 interface Props {
   channelId: string;
