@@ -49,10 +49,13 @@ function LoginForm() {
         <p style={{ fontSize: 13, color: 'var(--hotbox-text-muted)', marginBottom: 24 }}>
           Enter your invite code and pick a display name.
         </p>
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <form data-testid="login-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--hotbox-text-dim)' }}>Invite code</label>
+            <label htmlFor="login-code" style={{ fontSize: 12, fontWeight: 500, color: 'var(--hotbox-text-dim)' }}>Invite code</label>
             <input
+              id="login-code"
+              name="code"
+              data-testid="login-code"
               type="text"
               value={code}
               onChange={(e) => setCode(e.target.value)}
@@ -63,9 +66,12 @@ function LoginForm() {
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--hotbox-text-dim)' }}>Your name</label>
+            <label htmlFor="login-name" style={{ fontSize: 12, fontWeight: 500, color: 'var(--hotbox-text-dim)' }}>Your name</label>
             <input
               ref={nameRef}
+              id="login-name"
+              name="name"
+              data-testid="login-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -76,10 +82,11 @@ function LoginForm() {
             />
           </div>
           {error && (
-            <p style={{ fontSize: 13, color: 'var(--hotbox-mention)', marginTop: -4 }}>{error}</p>
+            <p data-testid="login-error" style={{ fontSize: 13, color: 'var(--hotbox-mention)', marginTop: -4 }}>{error}</p>
           )}
           <button
             type="submit"
+            data-testid="login-submit"
             disabled={disabled}
             style={{ background: 'var(--hotbox-accent)', color: 'white', border: 'none', borderRadius: 6, padding: '10px', fontSize: 14, fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, marginTop: 4 }}
           >
