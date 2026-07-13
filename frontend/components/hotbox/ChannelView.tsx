@@ -11,6 +11,9 @@ import type { AnyMessage, HotboxMessage, ServerMessage } from '@/lib/hotbox/type
 
 const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG ?? 'toadsage';
 
+const EMPTY_MESSAGES: AnyMessage[] = [];
+const EMPTY_TYPING: string[] = [];
+
 function isHotboxMsg(msg: AnyMessage): msg is HotboxMessage {
   return msg.type === 'message';
 }
@@ -71,7 +74,7 @@ function MessageRow({ msg }: { msg: AnyMessage }) {
 }
 
 function TypingIndicator({ channelId }: { channelId: string }) {
-  const typingUsers = useHotboxStore((s) => s.typingUsers[channelId] ?? []);
+  const typingUsers = useHotboxStore((s) => s.typingUsers[channelId] ?? EMPTY_TYPING);
   if (typingUsers.length === 0) return <div className="h-5" />;
   const label =
     typingUsers.length === 1 ? `${typingUsers[0]} is typing…`
@@ -90,7 +93,7 @@ interface Props {
 const WS_CURSOR_KEY = 'hotbox:lastSeenTs';
 
 export function ChannelView({ channelId, isDm }: Props) {
-  const messages = useHotboxStore((s) => s.messages[channelId] ?? []);
+  const messages = useHotboxStore((s) => s.messages[channelId] ?? EMPTY_MESSAGES);
   const channel = useHotboxStore((s) => s.channels.find((c) => c.id === channelId));
   const setActiveChannel = useHotboxStore((s) => s.setActiveChannel);
   const appendMessage = useHotboxStore((s) => s.appendMessage);

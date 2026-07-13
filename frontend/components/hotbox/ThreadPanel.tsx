@@ -11,6 +11,8 @@ import type { AnyMessage, HotboxMessage, ServerMessage } from '@/lib/hotbox/type
 
 const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG ?? 'toadsage';
 
+const EMPTY_MESSAGES: AnyMessage[] = [];
+
 function isHotboxMsg(msg: AnyMessage): msg is HotboxMessage {
   return msg.type === 'message';
 }
@@ -68,7 +70,7 @@ export function ThreadPanel({ channelId, messageId }: Props) {
   const [parentText, setParentText] = useState<string | null>(null);
   const { subscribe } = useWs();
   const virtuosoRef = useRef<VirtuosoHandle>(null);
-  const channelMessages = useHotboxStore((s) => s.messages[channelId] ?? []);
+  const channelMessages = useHotboxStore((s) => s.messages[channelId] ?? EMPTY_MESSAGES);
 
   // Resolve parent message from store or fetch
   useEffect(() => {
