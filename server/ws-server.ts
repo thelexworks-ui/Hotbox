@@ -38,12 +38,17 @@ const PING_INTERVAL_MS = 30_000;
 
 type PresenceStatus = 'active' | 'away' | 'dnd';
 
+interface AegisEnvelope {
+  v: number; alg: string; kid: string; iv: string; ciphertext: string; tag: string;
+}
+
 interface HotboxMessage {
   id: string;
   org_id: string;
   channel_id: string;
   sender_id: string;
   content: string | null;
+  crypto_envelope?: AegisEnvelope;
   thread_id?: string;
   type: 'message' | 'system';
   ts: string;
@@ -61,7 +66,7 @@ interface ClientSession {
 
 // Client → Server message types (§5.2)
 type ClientMessage =
-  | { type: 'msg.send';    channel_id: string; content: string; thread_id?: string; nonce: string }
+  | { type: 'msg.send';    channel_id: string; crypto_envelope: AegisEnvelope; thread_id?: string; nonce: string }
   | { type: 'msg.edit';    message_id: string; content: string }
   | { type: 'msg.delete';  message_id: string }
   | { type: 'msg.react';   message_id: string; emoji: string }
@@ -281,14 +286,16 @@ function handleClientMessage(session: ClientSession, raw: string): void {
         org_id: session.org_id,
         channel_id: msg.channel_id,
         sender_id: session.member_id,
-        content: msg.content,
+        content: null,
+        crypto_envelope: msg.crypto_envelope,
         thread_id: msg.thread_id,
         type: 'message',
         ts: new Date().toISOString(),
       };
       writeMessage(message);
       session.last_seen_ts = message.ts;
-      fanOut(session.org_id, msg.channel_id, { type: 'msg.new', message });
+      send(session.ws, { type: 'msg.ack', nonce: msg.nonce, message_id: message.id, ts: message.ts, channel_id: msg.channel_id });
+      fanOut(session.org_id, msg.channel_id, { type: 'msg.new', message }, session.session_id);
       break;
     }
 

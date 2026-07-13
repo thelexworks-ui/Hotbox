@@ -5,10 +5,15 @@ export const runtime = 'nodejs';
 
 const DEFAULT_ORG = process.env.HOTBOX_ORG ?? 'toadsage';
 
+const DEFAULT_CHANNELS = (org: string, now: string) => [
+  { id: 'general', name: '#general', type: 'system' as const, org, pinned: true, created_at: now, topic: 'General discussion', members: [], agent_name: undefined, agent_role: undefined },
+  { id: 'alerts',  name: '#alerts',  type: 'system' as const, org, pinned: true, created_at: now, topic: 'System alerts', members: [], agent_name: undefined, agent_role: undefined },
+];
+
 export async function GET(req: NextRequest) {
   const org = req.nextUrl.searchParams.get('org') ?? DEFAULT_ORG;
   const channels = listChannels(org);
-  return NextResponse.json(channels);
+  return NextResponse.json(channels.length > 0 ? channels : DEFAULT_CHANNELS(org, new Date().toISOString()));
 }
 
 export async function POST(req: NextRequest) {
