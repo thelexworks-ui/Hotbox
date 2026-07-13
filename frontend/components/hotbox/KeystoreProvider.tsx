@@ -93,7 +93,8 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
       if (cancelled) return;
       dbRef.current = db;
 
-      let existing = await (db as IDBPDatabase<HotboxDBSchema>).get('keypairs', memberId);
+      const safeId = memberId || 'user:local';
+      let existing = await (db as IDBPDatabase<HotboxDBSchema>).get('keypairs', safeId);
 
       if (!existing) {
         const kp = await crypto.subtle.generateKey(
@@ -103,7 +104,7 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
         ) as CryptoKeyPair;
 
         const pubKeyRaw = await crypto.subtle.exportKey('raw', kp.publicKey);
-        existing = { id: memberId, publicKey: kp.publicKey, privateKey: kp.privateKey };
+        existing = { id: safeId, publicKey: kp.publicKey, privateKey: kp.privateKey };
         await (db as IDBPDatabase<HotboxDBSchema>).put('keypairs', existing);
 
         try {

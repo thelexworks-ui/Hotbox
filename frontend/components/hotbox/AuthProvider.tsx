@@ -28,8 +28,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetch('/api/hotbox/me')
       .then((r) => r.json())
-      .then(({ memberId, org }: { memberId: string; org: string }) => {
-        setAuth({ memberId, org, ready: true });
+      .then((data: Partial<{ memberId: string; org: string }>) => {
+        // Guard: fall back to safe defaults if the response shape is unexpected.
+        // memberId must be a non-empty string — it becomes an IDB key.
+        setAuth({
+          memberId: data?.memberId || 'user:local',
+          org: data?.org || 'toadsage',
+          ready: true,
+        });
       })
       .catch(() => {
         // Non-fatal: keep defaults, mark ready so UI doesn't hang

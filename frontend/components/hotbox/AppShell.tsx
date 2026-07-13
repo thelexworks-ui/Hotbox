@@ -44,7 +44,7 @@ function KeystoreErrorScreen({ error, onRetry }: { error: string; onRetry(): voi
         Keystore unavailable — {error}
       </p>
       <p className="text-xs text-[var(--hotbox-text-dim)] max-w-xs text-center">
-        This usually means browser storage is blocked (private browsing mode or storage quota exceeded).
+        Try refreshing. If this persists, clear site data in browser settings.
       </p>
       <button
         onClick={onRetry}
