@@ -92,6 +92,14 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
     }
 
     (async () => {
+      // X25519 feature detect -- fails on Safari <17 and older Playwright WebKit builds.
+      try {
+        await crypto.subtle.generateKey({ name: 'X25519' }, false, ['deriveBits']);
+      } catch {
+        if (!cancelled) setInitError('Encrypted messaging requires X25519 support. Please upgrade to Safari 17+ or use Chrome 113+.');
+        return;
+      }
+
       const db = await openHotboxDB(ORG);
       if (cancelled) return;
       dbRef.current = db;
