@@ -51,6 +51,7 @@ export function KeyLossWarningModal({ onConfirm }: Props) {
         <label className="flex items-start gap-3 cursor-pointer select-none">
           <input
             type="checkbox"
+            data-testid="keystore-ack-checkbox"
             checked={checked}
             onChange={(e) => setChecked(e.target.checked)}
             className="mt-0.5 w-4 h-4 flex-shrink-0 cursor-pointer accent-[var(--hotbox-accent)]"
@@ -63,6 +64,7 @@ export function KeyLossWarningModal({ onConfirm }: Props) {
 
         {/* Confirm button */}
         <button
+          data-testid="keystore-ack-continue"
           onClick={onConfirm}
           disabled={!checked}
           className={[
