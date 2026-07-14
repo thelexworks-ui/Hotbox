@@ -97,9 +97,11 @@ for (const sub of ['frontend', 'server']) {
     console.log(`  ⚠ SKIP ${sub}/tsc — no node_modules (run npm install in ${sub}/)`);
     continue;
   }
-  const r = spawnSync(tscBin, ['--noEmit'], { cwd: dir, encoding: 'utf8' });
-  if (r.status !== 0) {
-    bail(`0 tsc/${sub}`, `TypeScript errors in ${sub}/`, (r.stdout + r.stderr).trim());
+  // shell:true required on Windows so .bin/ scripts (symlinks/shims) execute
+  const r = spawnSync(tscBin, ['--noEmit'], { cwd: dir, encoding: 'utf8', shell: true });
+  if (r.status !== 0 || r.error) {
+    const out = ((r.stdout || '') + (r.stderr || '')).trim();
+    bail(`0 tsc/${sub}`, `TypeScript errors in ${sub}/`, out || String(r.error || ''));
   }
   pass(`0a/${sub}`, 'compiles clean');
 }
