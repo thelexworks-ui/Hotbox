@@ -172,13 +172,14 @@ async function isReachable(url) {
       await page.waitForTimeout(2_000);
     }
 
-    // App-specific gate — workspace-label is only rendered by the real app,
+    // App-specific gate — mobile-tab-bar is rendered by AppShell on every route,
     // not by Vercel SSO login pages, DPL bypass pages, or keystore error screens.
-    const ok = await page.locator('[data-testid="workspace-label"]').isVisible({ timeout: 15_000 }).catch(() => false);
+    // workspace-label is inside `hidden md:flex` sidebar — invisible at 393px mobile viewport.
+    const ok = await page.locator('[data-testid="mobile-tab-bar"]').isVisible({ timeout: 15_000 }).catch(() => false);
     if (!ok) {
       const shot = path.join(OUT_DIR, `fail-login-${uid()}.png`);
       await page.screenshot({ path: shot }).catch(() => {});
-      bail('1 LOGIN', `workspace-label not visible — check screenshot: ${shot}`, `Page URL: ${page.url()}`);
+      bail('1 LOGIN', `mobile-tab-bar not visible — check screenshot: ${shot}`, `Page URL: ${page.url()}`);
     }
     return true;
   }
