@@ -106,7 +106,34 @@ for (const sub of ['frontend', 'server']) {
 
 // ── Gate 1–5: Playwright ──────────────────────────────────────────────────────
 
+// Quick reachability check before spinning up a browser.
+// If BASE_URL is localhost and the server isn't running, skip Gate 1 rather
+// than blocking the push entirely. Against real deploy URLs, fail if unreachable.
+async function isReachable(url) {
+  const http = require(url.startsWith('https') ? 'https' : 'http');
+  return new Promise(resolve => {
+    const req = http.get(url, { timeout: 3000 }, () => resolve(true));
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+  });
+}
+
 (async () => {
+  const reachable = await isReachable(BASE_URL);
+  const isLocal   = /localhost|127\.0\.0\.1/.test(BASE_URL);
+
+  if (!reachable) {
+    if (isLocal) {
+      console.log(`\n[Gates 1–5] SKIP — ${BASE_URL} not reachable (start npm run dev to enable Playwright gate)`);
+      console.log('  Gate 0 (TypeScript) was the only gate run. Playwright gates skipped.\n');
+      console.log('═'.repeat(64));
+      console.log('  SMOKE PASS (Gate 0 only) — start dev server for full Gate 1–5.');
+      console.log('═'.repeat(64));
+      process.exit(0);
+    }
+    bail('1 REACHABLE', `${BASE_URL} is not reachable — cannot run Playwright gates.`);
+  }
+
   console.log('\n[Gates 1–5] Playwright (mobile 393×852)');
   const browser = await playwright[ENGINE].launch({ headless: true });
 
