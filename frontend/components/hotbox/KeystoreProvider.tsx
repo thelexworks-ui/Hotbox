@@ -29,7 +29,7 @@ interface HotboxDBSchema {
 // Retry pubkey registration with exponential backoff. Fire-and-forget (never blocks
 // keypair generation). On all-fail, writes a localStorage pending flag so the next
 // init cycle retries before proceeding — prevents permanent pubkey gaps after a 503.
-async function attemptPubkeyRegistration(memberId: string, pubKeyRaw: ArrayBuffer): Promise<void> {
+async function attemptPubkeyRegistration(memberId: string, pubKeyRaw: ArrayBuffer, onSuccess?: () => void): Promise<void> {
   const pendingKey = `hotbox:pubkey-pending:${memberId}`;
   const delays = [0, 2000, 4000];
   let lastErr = '';
@@ -42,6 +42,7 @@ async function attemptPubkeyRegistration(memberId: string, pubKeyRaw: ArrayBuffe
         body: JSON.stringify({ memberId, publicKey: bytesToB64(new Uint8Array(pubKeyRaw)) }),
       });
       if (!r.ok) { lastErr = `HTTP ${r.status}`; continue; }
+      onSuccess?.();
       localStorage.removeItem(pendingKey);
       return;
     } catch (err) {
@@ -75,6 +76,7 @@ async function openHotboxDB(org: string): Promise<IDBPDatabase> {
 
 export interface KeystoreContextValue {
   ready: boolean;
+  pubkeyReady: boolean;
   initError: string | null;
   retryInit(): void;
   myPublicKey: CryptoKey | null;
@@ -99,6 +101,7 @@ export function useKeystore(): KeystoreContextValue {
 export function KeystoreProvider({ children }: { children: React.ReactNode }) {
   const { memberId, ready: authReady } = useAuth();
   const [ready, setReady] = useState(false);
+  const [pubkeyReady, setPubkeyReady] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [myPublicKey, setMyPublicKey] = useState<CryptoKey | null>(null);
@@ -161,17 +164,20 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
         // IDB write is done — fire pubkey registration independently so a POST failure
         // never blocks keypair availability. attemptPubkeyRegistration sets a pending
         // localStorage flag on all-fail so next init retries.
-        void attemptPubkeyRegistration(safeId, pubKeyRaw);
+        void attemptPubkeyRegistration(safeId, pubKeyRaw, () => setPubkeyReady(true));
 
         pubKey  = await crypto.subtle.importKey('jwk', pubKeyJwk,  { name: 'X25519' }, false, []);
         privKey = await crypto.subtle.importKey('jwk', privKeyJwk, { name: 'X25519' }, false, ['deriveKey', 'deriveBits']);
       } else {
-        pubKey  = await crypto.subtle.importKey('jwk', existing.publicKeyJwk,  { name: 'X25519' }, false, []);
+        // extractable: true on public key so exportKey('raw') works in pending retry path
+        pubKey  = await crypto.subtle.importKey('jwk', existing.publicKeyJwk,  { name: 'X25519' }, true, []);
         privKey = await crypto.subtle.importKey('jwk', existing.privateKeyJwk, { name: 'X25519' }, false, ['deriveKey', 'deriveBits']);
 
         // Re-attempt pending pubkey registration from a prior failed session.
         if (localStorage.getItem(`hotbox:pubkey-pending:${safeId}`)) {
-          crypto.subtle.exportKey('raw', pubKey).then((raw) => void attemptPubkeyRegistration(safeId, raw));
+          crypto.subtle.exportKey('raw', pubKey).then((raw) => void attemptPubkeyRegistration(safeId, raw, () => setPubkeyReady(true)));
+        } else {
+          setPubkeyReady(true);
         }
       }
 
@@ -399,6 +405,7 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
   return (
     <Ctx.Provider value={{
       ready,
+      pubkeyReady,
       initError,
       retryInit,
       myPublicKey,
