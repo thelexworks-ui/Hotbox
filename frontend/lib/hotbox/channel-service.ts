@@ -37,6 +37,12 @@ function hotboxRoot(org: string): string {
   return path.join(os.homedir(), '.cortextos', INSTANCE_ID, 'orgs', org, 'hotbox');
 }
 
+// Key files go to /tmp (writable on Vercel Lambda) — ephemeral per cold start;
+// move to Vercel Blob/KV for persistence (morning-review todo).
+function tmpKeysRoot(org: string): string {
+  return path.join('/tmp', 'hotbox', org);
+}
+
 function channelDir(org: string, channelId: string): string {
   return path.join(hotboxRoot(org), 'channels', channelId);
 }
@@ -227,7 +233,7 @@ function bumpThreadCount(org: string, channelId: string, parentId: string): void
 // ---------- Public key registry (disk-backed) ----------
 
 function keysPath(org: string): string {
-  return path.join(hotboxRoot(org), 'pubkeys.json');
+  return path.join(tmpKeysRoot(org), 'pubkeys.json');
 }
 
 export function storePublicKey(org: string, memberId: string, publicKey: string): void {
@@ -252,7 +258,7 @@ export function loadPublicKey(org: string, memberId: string): string | null {
 // ---------- Wrapped key bundles (per-chat per-member) ----------
 
 function wrappedBundlesPath(org: string): string {
-  return path.join(hotboxRoot(org), 'wrapped-bundles.json');
+  return path.join(tmpKeysRoot(org), 'wrapped-bundles.json');
 }
 
 interface WrappedBundleEntry { wk: string; epk: string; wiv: string }

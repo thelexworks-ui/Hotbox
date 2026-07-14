@@ -211,7 +211,17 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
     const activeMemberId = useOrch ? 'orchestrator' : memberIdRef.current;
 
     const res = await fetch(`/api/hotbox/keys?chat=${encodeURIComponent(chatId)}&member=${encodeURIComponent(activeMemberId)}`);
-    if (!res.ok) throw new Error(`[keystore] no wrapped key for ${activeMemberId} in chat ${chatId}`);
+    if (!res.ok) {
+      // No server-side bundle (server storage cold/missing) — auto-generate local channel key.
+      // Enables single-user send/receive without server key exchange.
+      // Telemetry: log so this fallback path is observable (not silent).
+      console.warn(`[keystore] no wrapped bundle for ${activeMemberId} in ${chatId} (${res.status}) — generating local channel key`);
+      const rawCk = crypto.getRandomValues(new Uint8Array(32));
+      const ck = await crypto.subtle.importKey('raw', rawCk, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+      const ckBytes = await crypto.subtle.exportKey('raw', ck);
+      await (db as IDBPDatabase<HotboxDBSchema>).put('chat-keys', { id: chatId, ckBytes, cached_at: new Date().toISOString() });
+      return crypto.subtle.importKey('raw', ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+    }
     const bundle = await res.json() as WrappedKeyBundle;
 
     return unwrapCK(chatId, activeMemberId, activePrivateKey, bundle);
