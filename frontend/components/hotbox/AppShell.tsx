@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { usePathname } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { KeyRotationWatcher } from './KeyRotationWatcher';
 import { KeyLossWarningModal } from './KeyLossWarningModal';
@@ -56,11 +57,56 @@ function KeystoreErrorScreen({ error, onRetry }: { error: string; onRetry(): voi
   );
 }
 
+type TabItem = { icon: string; label: string; action: 'home' | 'dms' | 'activity' | 'more' };
+
+const TABS: TabItem[] = [
+  { icon: '⌂', label: 'Home',     action: 'home' },
+  { icon: '💬', label: 'DMs',      action: 'dms' },
+  { icon: '🔔', label: 'Activity', action: 'activity' },
+  { icon: '⋯',  label: 'More',    action: 'more' },
+];
+
+function MobileTabBar({ onOpenDrawer }: { onOpenDrawer(): void }) {
+  const pathname = usePathname();
+
+  const handleTab = (action: TabItem['action']) => {
+    // All tabs currently open the drawer — future tabs can deep-link
+    onOpenDrawer();
+  };
+
+  const isHome = !pathname.startsWith('/dm') && !pathname.startsWith('/activity');
+  const isDMs  = pathname.startsWith('/dm');
+
+  return (
+    <nav
+      className="md:hidden flex items-stretch fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--hotbox-border)]"
+      style={{ height: 64, background: 'var(--hotbox-surface)' }}
+      data-testid="mobile-tab-bar"
+    >
+      {TABS.map((tab) => {
+        const active =
+          (tab.action === 'home' && isHome) ||
+          (tab.action === 'dms'  && isDMs);
+        return (
+          <button
+            key={tab.action}
+            onClick={() => handleTab(tab.action)}
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 text-[var(--hotbox-text-muted)] active:opacity-70"
+            style={active ? { color: 'var(--hotbox-accent)' } : undefined}
+          >
+            <span className="text-xl leading-none">{tab.icon}</span>
+            <span className="text-[10px] font-medium leading-none">{tab.label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { ready, initError, retryInit, keyLossAckRequired, acknowledgeKeyLoss } = useKeystore();
+  const [mobileDrawerOpen, setMobileDrawerOpen] = React.useState(false);
 
-  // First-time key-loss acknowledgement must happen before anything else.
-  // Render only the modal — no children, no decrypt calls, no premature IDB access.
   if (keyLossAckRequired) {
     return (
       <div className="flex flex-col h-screen" style={{ background: 'var(--hotbox-bg)' }}>
@@ -69,9 +115,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Gate children on keystore readiness — prevents ChannelView from mounting before
-  // IDB is open, which would cause all pre-loaded messages to hit the dbRef.current!
-  // null-assert and land permanently in [decryption failed] with no retry path.
   if (!ready) {
     if (initError) return <KeystoreErrorScreen error={initError} onRetry={retryInit} />;
     return <KeystoreLoadingScreen />;
@@ -82,6 +125,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <KeyRotationWatcher />
       <WsStatusBar />
       <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Desktop sidebar */}
         <aside
           data-testid="sidebar"
           className="hidden md:flex flex-col flex-shrink-0 w-60 border-r border-[var(--hotbox-border)]"
@@ -89,10 +133,40 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         >
           <Sidebar />
         </aside>
-        <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+
+        {/* Mobile sidebar drawer */}
+        {mobileDrawerOpen && (
+          <div className="md:hidden fixed inset-0 z-50 flex">
+            <div
+              className="absolute inset-0 bg-black/40"
+              onClick={() => setMobileDrawerOpen(false)}
+            />
+            <aside
+              className="relative z-10 flex flex-col w-72 h-full shadow-2xl border-r border-[var(--hotbox-border)]"
+              style={{ background: 'var(--hotbox-surface)' }}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--hotbox-border)]">
+                <span className="font-semibold text-sm text-[var(--hotbox-text)]">Menu</span>
+                <button
+                  onClick={() => setMobileDrawerOpen(false)}
+                  className="text-[var(--hotbox-text-dim)] hover:text-[var(--hotbox-text)] text-lg leading-none p-1"
+                  aria-label="Close menu"
+                >
+                  ✕
+                </button>
+              </div>
+              <Sidebar onItemClick={() => setMobileDrawerOpen(false)} />
+            </aside>
+          </div>
+        )}
+
+        {/* Main content — extra bottom padding on mobile for the tab bar */}
+        <main className="flex-1 min-w-0 flex flex-col overflow-hidden pb-16 md:pb-0">
           {children}
         </main>
       </div>
+
+      <MobileTabBar onOpenDrawer={() => setMobileDrawerOpen(true)} />
     </div>
   );
 }

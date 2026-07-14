@@ -103,9 +103,10 @@ export function ChannelView({ channelId, isDm }: Props) {
   const incrementThreadCount = useHotboxStore((s) => s.incrementThreadCount);
   const removeMessage = useHotboxStore((s) => s.removeMessage);
   const updateReaction = useHotboxStore((s) => s.updateReaction);
-  const { subscribe } = useWs();
+  const { subscribe, send, status } = useWs();
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [loading, setLoading] = React.useState(true);
+  const [memberCount, setMemberCount] = React.useState(channel?.members.length ?? 0);
 
   useEffect(() => { setActiveChannel(channelId); }, [channelId, setActiveChannel]);
 
@@ -178,6 +179,27 @@ export function ChannelView({ channelId, isDm }: Props) {
     return () => { unsubs.forEach((u) => u()); };
   }, [channelId, subscribe, appendMessage, setTyping, clearTyping, incrementThreadCount, removeMessage, updateReaction]);
 
+  // channel.join → drives member count
+  useEffect(() => {
+    if (status !== 'open') return;
+    send({ type: 'channel.join', channel_id: channelId });
+    setMemberCount((n) => n + 1);
+    const unsubs: (() => void)[] = [];
+    unsubs.push(subscribe('member.join', (msg) => {
+      const m = msg as unknown as { channel_id: string };
+      if (m.channel_id === channelId) setMemberCount((n) => n + 1);
+    }));
+    unsubs.push(subscribe('member.leave', (msg) => {
+      const m = msg as unknown as { channel_id: string };
+      if (m.channel_id === channelId) setMemberCount((n) => Math.max(0, n - 1));
+    }));
+    return () => {
+      unsubs.forEach((u) => u());
+      send({ type: 'channel.leave', channel_id: channelId });
+      setMemberCount((n) => Math.max(0, n - 1));
+    };
+  }, [channelId, status, send, subscribe]);
+
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--hotbox-bg)' }}>
       {/* Header */}
@@ -195,7 +217,7 @@ export function ChannelView({ channelId, isDm }: Props) {
           </>
         )}
         <div data-testid="member-count" className="ml-auto text-xs text-[var(--hotbox-text-dim)]">
-          {channel?.members.length ?? 0} members
+          {memberCount} {memberCount === 1 ? 'member' : 'members'}
         </div>
       </div>
 

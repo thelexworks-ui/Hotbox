@@ -2,20 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* === HOT PALETTE v2 — daedalus 2026-07-13 === */
 :root {
-  --hotbox-bg: #0f0f0f;
-  --hotbox-surface: #1a1a1a;
-  --hotbox-surface-2: #242424;
-  --hotbox-border: #2e2e2e;
-  --hotbox-accent: #5865f2;
-  --hotbox-accent-hover: #4752c4;
-  --hotbox-text: #dcddde;
-  --hotbox-text-muted: #8e9297;
-  --hotbox-text-dim: #72767d;
-  --hotbox-online: #23a55a;
-  --hotbox-offline: #80848e;
-  --hotbox-crashed: #f23f43;
-  --hotbox-mention: #faa61a;
+  --hotbox-bg:           oklch(0.99 0.008 85);    /* #FDF9F4 warm white page */
+  --hotbox-surface:      oklch(0.97 0.015 80);    /* #F7F1E5 cream sidebar/panels */
+  --hotbox-surface-2:    oklch(1 0 0);             /* #FFFFFF inputs/cards */
+  --hotbox-border:       oklch(0.88 0.018 78);    /* #DDD0B8 warm tan */
+  --hotbox-border-strong:oklch(0.78 0.025 72);
+  --hotbox-accent:       oklch(0.50 0.200 45);    /* #B05000 deep orange — AA 5.3:1 */
+  --hotbox-accent-hover: oklch(0.46 0.205 44);
+  --hotbox-text:         oklch(0.13 0.020 60);    /* #1C1812 near-black */
+  --hotbox-text-muted:   oklch(0.42 0.028 60);    /* #625848 warm mid */
+  --hotbox-text-dim:     oklch(0.50 0.022 68);    /* #706050 timestamps — AA 5.6:1 */
+  --hotbox-online:       oklch(0.52 0.155 148);
+  --hotbox-offline:      oklch(0.68 0.010 75);
+  --hotbox-crashed:      oklch(0.50 0.215 22);    /* #C0321E warm red */
+  --hotbox-mention:      oklch(0.60 0.150 70);    /* amber */
+  --hotbox-yellow:       oklch(0.91 0.170 88);    /* #FFE232 own-msg bubble */
+  --hotbox-yellow-fg:    oklch(0.13 0.020 60);    /* dark text on yellow — AA 13.6:1 */
+  --hotbox-selected:     oklch(0.97 0.060 88);    /* #FFF8D0 active channel */
 }
 
 * {
