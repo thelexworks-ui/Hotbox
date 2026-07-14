@@ -88,7 +88,15 @@ export async function POST(req: NextRequest) {
   }
 
   // Public key registration: { memberId, publicKey }
+  // Identity check: caller may only register their own pubkey.
   if (body.memberId && body.publicKey) {
+    const requesterId = getRequestingMemberId();
+    if (body.memberId !== requesterId) {
+      console.warn('[hotbox-keys] pubkey registration rejected — memberId mismatch', {
+        attempted: body.memberId, actual: requesterId,
+      });
+      return NextResponse.json({ error: 'cannot register pubkey for another member' }, { status: 403 });
+    }
     try {
       await storePublicKey(org, body.memberId, body.publicKey);
       return NextResponse.json({ ok: true });

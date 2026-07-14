@@ -15,7 +15,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 function buildClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_ANON_KEY;
   if (!url || !key) {
     throw new Error('[hotbox-keys] NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not configured');
   }
@@ -101,6 +101,7 @@ export async function loadPublicKey(org: string, memberId: string): Promise<stri
   if (error) {
     if (error.code !== 'PGRST116') {
       console.error('[hotbox-keys] ERROR loading public key', { org, memberId, message: error.message });
+      throw error;
     }
     return null;
   }
@@ -148,6 +149,7 @@ export async function loadWrappedBundle(
   if (error) {
     if (error.code !== 'PGRST116') {
       console.error('[hotbox-keys] ERROR loading wrapped bundle', { org, chatId, memberId, message: error.message });
+      throw error;
     }
     return null;
   }

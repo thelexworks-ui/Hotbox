@@ -26,6 +26,32 @@ interface HotboxDBSchema {
   'chat-keys': { key: string; value: { id: string; ckBytes: ArrayBuffer; cached_at: string } };
 }
 
+// Retry pubkey registration with exponential backoff. Fire-and-forget (never blocks
+// keypair generation). On all-fail, writes a localStorage pending flag so the next
+// init cycle retries before proceeding — prevents permanent pubkey gaps after a 503.
+async function attemptPubkeyRegistration(memberId: string, pubKeyRaw: ArrayBuffer): Promise<void> {
+  const pendingKey = `hotbox:pubkey-pending:${memberId}`;
+  const delays = [0, 2000, 4000];
+  let lastErr = '';
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (delays[attempt]) await new Promise<void>((r) => setTimeout(r, delays[attempt]));
+    try {
+      const r = await fetch('/api/hotbox/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memberId, publicKey: bytesToB64(new Uint8Array(pubKeyRaw)) }),
+      });
+      if (!r.ok) { lastErr = `HTTP ${r.status}`; continue; }
+      localStorage.removeItem(pendingKey);
+      return;
+    } catch (err) {
+      lastErr = err instanceof Error ? err.message : String(err);
+    }
+  }
+  console.error('[keystore] pubkey registration failed after 3 attempts — setting pending flag', { memberId, lastErr });
+  localStorage.setItem(pendingKey, '1');
+}
+
 async function openHotboxDB(org: string): Promise<IDBPDatabase> {
   return openDB(`hotbox-${org}`, 4, {
     upgrade(db, oldVersion) {
@@ -132,19 +158,21 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
 
         await (db as IDBPDatabase<HotboxDBSchema>).put('keypairs', { id: safeId, publicKeyJwk: pubKeyJwk, privateKeyJwk: privKeyJwk });
 
-        try {
-          await fetch('/api/hotbox/keys', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ memberId, publicKey: bytesToB64(new Uint8Array(pubKeyRaw)) }),
-          });
-        } catch { /* non-fatal */ }
+        // IDB write is done — fire pubkey registration independently so a POST failure
+        // never blocks keypair availability. attemptPubkeyRegistration sets a pending
+        // localStorage flag on all-fail so next init retries.
+        void attemptPubkeyRegistration(safeId, pubKeyRaw);
 
         pubKey  = await crypto.subtle.importKey('jwk', pubKeyJwk,  { name: 'X25519' }, false, []);
         privKey = await crypto.subtle.importKey('jwk', privKeyJwk, { name: 'X25519' }, false, ['deriveKey', 'deriveBits']);
       } else {
         pubKey  = await crypto.subtle.importKey('jwk', existing.publicKeyJwk,  { name: 'X25519' }, false, []);
         privKey = await crypto.subtle.importKey('jwk', existing.privateKeyJwk, { name: 'X25519' }, false, ['deriveKey', 'deriveBits']);
+
+        // Re-attempt pending pubkey registration from a prior failed session.
+        if (localStorage.getItem(`hotbox:pubkey-pending:${safeId}`)) {
+          crypto.subtle.exportKey('raw', pubKey).then((raw) => void attemptPubkeyRegistration(safeId, raw));
+        }
       }
 
       if (cancelled) return;
