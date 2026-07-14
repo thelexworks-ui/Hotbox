@@ -292,7 +292,7 @@ function handleClientMessage(session: ClientSession, raw: string): void {
         type: 'message',
         ts: new Date().toISOString(),
       };
-      writeMessage(message);
+      try { writeMessage(message); } catch (e) { console.error('[ws] writeMessage failed:', e); }
       session.last_seen_ts = message.ts;
       send(session.ws, { type: 'msg.ack', nonce: msg.nonce, message_id: message.id, ts: message.ts, channel_id: msg.channel_id });
       fanOut(session.org_id, msg.channel_id, { type: 'msg.new', message }, session.session_id);
