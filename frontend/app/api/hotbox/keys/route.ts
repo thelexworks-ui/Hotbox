@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { storePublicKey, loadPublicKey, storeWrappedBundle, loadWrappedBundle } from '@/lib/hotbox/channel-service';
+import {
+  persistenceProbe,
+  storePublicKey,
+  loadPublicKey,
+  storeWrappedBundle,
+  loadWrappedBundle,
+} from '@/lib/hotbox/keys-store';
 
 export const runtime = 'nodejs';
 
@@ -16,29 +22,49 @@ function getRequestingMemberId(): string {
 }
 
 export async function GET(req: NextRequest) {
+  try {
+    await persistenceProbe;
+  } catch {
+    return NextResponse.json({ error: 'Key storage unavailable' }, { status: 503 });
+  }
+
   const chat = req.nextUrl.searchParams.get('chat');
   const member = req.nextUrl.searchParams.get('member');
   const org = req.nextUrl.searchParams.get('org') ?? DEFAULT_ORG;
 
   // Public key lookup: /api/hotbox/keys?member=<memberId>
   if (member && !chat) {
-    const publicKey = loadPublicKey(org, member);
-    if (!publicKey) return NextResponse.json({ error: 'not found' }, { status: 404 });
-    return NextResponse.json({ memberId: member, publicKey });
+    try {
+      const publicKey = await loadPublicKey(org, member);
+      if (!publicKey) return NextResponse.json({ error: 'not found' }, { status: 404 });
+      return NextResponse.json({ memberId: member, publicKey });
+    } catch {
+      return NextResponse.json({ error: 'key lookup failed' }, { status: 500 });
+    }
   }
 
   // Wrapped bundle lookup: /api/hotbox/keys?chat=<chatId>[&member=<memberId>]
   if (chat) {
     const memberId = member ?? getRequestingMemberId();
-    const bundle = loadWrappedBundle(org, chat, memberId);
-    if (!bundle) return NextResponse.json({ error: 'not found' }, { status: 404 });
-    return NextResponse.json(bundle);
+    try {
+      const bundle = await loadWrappedBundle(org, chat, memberId);
+      if (!bundle) return NextResponse.json({ error: 'not found' }, { status: 404 });
+      return NextResponse.json(bundle);
+    } catch {
+      return NextResponse.json({ error: 'key lookup failed' }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ error: 'chat or member param required' }, { status: 400 });
 }
 
 export async function POST(req: NextRequest) {
+  try {
+    await persistenceProbe;
+  } catch {
+    return NextResponse.json({ error: 'Key storage unavailable' }, { status: 503 });
+  }
+
   const body = await req.json() as {
     memberId?: string;
     publicKey?: string;
@@ -53,15 +79,26 @@ export async function POST(req: NextRequest) {
   // Wrapped bundle write: { chatId, memberId, wk, epk, wiv }
   if (body.chatId && body.wk && body.epk && body.wiv) {
     const memberId = body.memberId ?? getRequestingMemberId();
-    storeWrappedBundle(org, body.chatId, memberId, body.wk, body.epk, body.wiv);
-    return NextResponse.json({ ok: true });
+    try {
+      await storeWrappedBundle(org, body.chatId, memberId, body.wk, body.epk, body.wiv);
+      return NextResponse.json({ ok: true });
+    } catch {
+      return NextResponse.json({ error: 'failed to store wrapped key' }, { status: 500 });
+    }
   }
 
   // Public key registration: { memberId, publicKey }
   if (body.memberId && body.publicKey) {
-    storePublicKey(org, body.memberId, body.publicKey);
-    return NextResponse.json({ ok: true });
+    try {
+      await storePublicKey(org, body.memberId, body.publicKey);
+      return NextResponse.json({ ok: true });
+    } catch {
+      return NextResponse.json({ error: 'failed to store public key' }, { status: 500 });
+    }
   }
 
-  return NextResponse.json({ error: 'provide {memberId, publicKey} or {chatId, memberId, wk, epk, wiv}' }, { status: 400 });
+  return NextResponse.json(
+    { error: 'provide {memberId, publicKey} or {chatId, memberId, wk, epk, wiv}' },
+    { status: 400 },
+  );
 }

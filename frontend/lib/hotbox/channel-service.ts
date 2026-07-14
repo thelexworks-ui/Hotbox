@@ -37,12 +37,6 @@ function hotboxRoot(org: string): string {
   return path.join(os.homedir(), '.cortextos', INSTANCE_ID, 'orgs', org, 'hotbox');
 }
 
-// Key files go to /tmp (writable on Vercel Lambda) — ephemeral per cold start;
-// move to Vercel Blob/KV for persistence (morning-review todo).
-function tmpKeysRoot(org: string): string {
-  return path.join('/tmp', 'hotbox', org);
-}
-
 function channelDir(org: string, channelId: string): string {
   return path.join(hotboxRoot(org), 'channels', channelId);
 }
@@ -228,58 +222,6 @@ function bumpThreadCount(org: string, channelId: string, parentId: string): void
       return;
     }
   }
-}
-
-// ---------- Public key registry (disk-backed) ----------
-
-function keysPath(org: string): string {
-  return path.join(tmpKeysRoot(org), 'pubkeys.json');
-}
-
-export function storePublicKey(org: string, memberId: string, publicKey: string): void {
-  const fp = keysPath(org);
-  let registry: Record<string, string> = {};
-  if (fs.existsSync(fp)) {
-    try { registry = JSON.parse(fs.readFileSync(fp, 'utf8')) as Record<string, string>; } catch { /* reset */ }
-  }
-  registry[memberId] = publicKey;
-  writeAtomic(fp, registry);
-}
-
-export function loadPublicKey(org: string, memberId: string): string | null {
-  const fp = keysPath(org);
-  if (!fs.existsSync(fp)) return null;
-  try {
-    const registry = JSON.parse(fs.readFileSync(fp, 'utf8')) as Record<string, string>;
-    return registry[memberId] ?? null;
-  } catch { return null; }
-}
-
-// ---------- Wrapped key bundles (per-chat per-member) ----------
-
-function wrappedBundlesPath(org: string): string {
-  return path.join(tmpKeysRoot(org), 'wrapped-bundles.json');
-}
-
-interface WrappedBundleEntry { wk: string; epk: string; wiv: string }
-
-export function storeWrappedBundle(org: string, chatId: string, memberId: string, wk: string, epk: string, wiv: string): void {
-  const fp = wrappedBundlesPath(org);
-  let store: Record<string, WrappedBundleEntry> = {};
-  if (fs.existsSync(fp)) {
-    try { store = JSON.parse(fs.readFileSync(fp, 'utf8')) as Record<string, WrappedBundleEntry>; } catch { /* reset */ }
-  }
-  store[`${chatId}:${memberId}`] = { wk, epk, wiv };
-  writeAtomic(fp, store);
-}
-
-export function loadWrappedBundle(org: string, chatId: string, memberId: string): WrappedBundleEntry | null {
-  const fp = wrappedBundlesPath(org);
-  if (!fs.existsSync(fp)) return null;
-  try {
-    const store = JSON.parse(fs.readFileSync(fp, 'utf8')) as Record<string, WrappedBundleEntry>;
-    return store[`${chatId}:${memberId}`] ?? null;
-  } catch { return null; }
 }
 
 export function readCursor(org: string): string | null {
