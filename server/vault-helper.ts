@@ -185,11 +185,11 @@ export async function wrapChatKeyForMember(
   );
 
   // 2. Generate ephemeral X25519 keypair for ECIES
-  const ephemeral = await subtle.generateKey(
+  const ephemeral = (await subtle.generateKey(
     { name: 'X25519' },
     true,
     ['deriveKey', 'deriveBits'],
-  );
+  )) as CryptoKeyPair;
 
   // 3. ECDH: ephemeral private + member public → shared secret
   const sharedBits = await subtle.deriveBits(
@@ -224,8 +224,9 @@ export async function wrapChatKeyForMember(
   );
 
   // 6. Generate per-bundle wrap IV
-  const wrapIv = globalThis.crypto?.getRandomValues(new Uint8Array(12))
-    ?? new Uint8Array((await import('node:crypto')).randomBytes(12));
+  const wrapIv: Uint8Array = globalThis.crypto
+    ? globalThis.crypto.getRandomValues(new Uint8Array(12))
+    : Uint8Array.from((await import('node:crypto')).randomBytes(12));
 
   // 7. AES-GCM wrap
   const wrappedKey = await subtle.wrapKey('raw', ckKey, wrapKey, { name: 'AES-GCM', iv: wrapIv });
