@@ -29,7 +29,7 @@
 
 'use strict';
 
-const { spawnSync } = require('child_process');
+const { spawnSync, execSync } = require('child_process');
 const path          = require('path');
 const fs            = require('fs');
 
@@ -97,11 +97,12 @@ for (const sub of ['frontend', 'server']) {
     console.log(`  ⚠ SKIP ${sub}/tsc — no node_modules (run npm install in ${sub}/)`);
     continue;
   }
-  // shell:true required on Windows so .bin/ scripts (symlinks/shims) execute
-  const r = spawnSync(tscBin, ['--noEmit'], { cwd: dir, encoding: 'utf8', shell: true });
-  if (r.status !== 0 || r.error) {
-    const out = ((r.stdout || '') + (r.stderr || '')).trim();
-    bail(`0 tsc/${sub}`, `TypeScript errors in ${sub}/`, out || String(r.error || ''));
+  // Use execSync with a quoted path string — avoids shell:true args-escaping
+  // deprecation warning while still working with Windows .bin/ shims.
+  try {
+    execSync(`"${tscBin}" --noEmit`, { cwd: dir, stdio: 'pipe' });
+  } catch (e) {
+    bail(`0 tsc/${sub}`, `TypeScript errors in ${sub}/`, String(e.stdout || e.stderr || e.message || '').trim());
   }
   pass(`0a/${sub}`, 'compiles clean');
 }
