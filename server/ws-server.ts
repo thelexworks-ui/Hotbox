@@ -200,7 +200,8 @@ function unsubscribeAll(session: ClientSession): void {
 // --------------------------------------------------------------------------
 
 function send(ws: WebSocket, msg: object): void {
-  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+  if (ws.readyState !== WebSocket.OPEN) return;
+  try { ws.send(JSON.stringify(msg)); } catch (e) { console.error('[hotbox-ws] send error:', e); }
 }
 
 function fanOut(orgId: string, channelId: string, msg: object, excludeSession?: string): void {
@@ -432,7 +433,10 @@ function handleConnection(ws: WebSocket, req: IncomingMessage): void {
   // Set initial presence
   presenceMap.set(payload.member_id, 'active');
 
-  ws.on('message', (data) => handleClientMessage(session, data.toString()));
+  ws.on('message', (data) => {
+    try { handleClientMessage(session, data.toString()); }
+    catch (e) { console.error('[hotbox-ws] unhandled error in message handler:', e); }
+  });
 
   ws.on('close', () => {
     clearInterval(session.ping_timer);
