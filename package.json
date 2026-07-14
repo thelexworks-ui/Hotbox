@@ -1,0 +1,12 @@
+{
+  "name": "hotbox-root",
+  "private": true,
+  "scripts": {
+    "smoke": "node scripts/smoke_prepush.js",
+    "smoke:prod": "SMOKE_BASE_URL=https://hotbox-seven.vercel.app node scripts/smoke_prepush.js",
+    "install-hook": "node scripts/smoke_prepush.js --install-hook"
+  },
+  "devDependencies": {
+    "playwright": "*"
+  }
+}
