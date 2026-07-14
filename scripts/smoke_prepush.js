@@ -37,10 +37,9 @@ const fs            = require('fs');
 
 if (process.argv.includes('--install-hook')) {
   const hookPath = path.resolve(__dirname, '..', '.git', 'hooks', 'pre-push');
-  const script   = path.resolve(__dirname, 'smoke_prepush.js');
-  const rel      = path.relative(path.dirname(hookPath), script).replace(/\\/g, '/');
+  // git hooks run with CWD = repo root, so use repo-root-relative path
   fs.mkdirSync(path.dirname(hookPath), { recursive: true });
-  fs.writeFileSync(hookPath, `#!/bin/sh\nnode "${rel}"\n`, 'utf8');
+  fs.writeFileSync(hookPath, '#!/bin/sh\nnode scripts/smoke_prepush.js\n', 'utf8');
   try { fs.chmodSync(hookPath, 0o755); } catch {}
   console.log(`[HOOK] Installed pre-push hook → ${hookPath}`);
   process.exit(0);
