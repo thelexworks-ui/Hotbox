@@ -295,7 +295,12 @@ function handleClientMessage(session: ClientSession, raw: string): void {
       };
       try { writeMessage(message); } catch (e) { console.error('[ws] writeMessage failed:', e); }
       session.last_seen_ts = message.ts;
-      send(session.ws, { type: 'msg.ack', nonce: msg.nonce, message_id: message.id, ts: message.ts, channel_id: msg.channel_id });
+      // Broadcast ack to ALL sessions of this member — handles mid-reconnect race where
+      // the sending session's WS may be closing before the ack can be delivered.
+      const ackMsg = { type: 'msg.ack', nonce: msg.nonce, message_id: message.id, ts: message.ts, channel_id: msg.channel_id };
+      for (const [, s] of sessions) {
+        if (s.org_id === session.org_id && s.member_id === session.member_id) send(s.ws, ackMsg);
+      }
       fanOut(session.org_id, msg.channel_id, { type: 'msg.new', message }, session.session_id);
       break;
     }

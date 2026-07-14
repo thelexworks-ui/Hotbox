@@ -168,7 +168,7 @@ export interface WrapResult {
 }
 
 export async function wrapChatKeyForMember(
-  ck: Uint8Array,              // 32-byte raw AES-256-GCM chat key
+  ck: Uint8Array<ArrayBuffer>,              // 32-byte raw AES-256-GCM chat key
   memberPublicKeyBase64: string, // base64 SPKI X25519 public key of recipient
   channelId: string,
   memberId: string,
@@ -224,9 +224,10 @@ export async function wrapChatKeyForMember(
   );
 
   // 6. Generate per-bundle wrap IV
-  const wrapIv: Uint8Array = globalThis.crypto
+  const wrapIv = (globalThis.crypto
     ? globalThis.crypto.getRandomValues(new Uint8Array(12))
-    : Uint8Array.from((await import('node:crypto')).randomBytes(12));
+    : new Uint8Array((await import('node:crypto')).randomBytes(12).buffer as ArrayBuffer)
+  ) as Uint8Array<ArrayBuffer>;
 
   // 7. AES-GCM wrap
   const wrappedKey = await subtle.wrapKey('raw', ckKey, wrapKey, { name: 'AES-GCM', iv: wrapIv });
