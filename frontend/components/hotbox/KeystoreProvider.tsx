@@ -27,13 +27,22 @@ interface HotboxDBSchema {
 }
 
 async function openHotboxDB(org: string): Promise<IDBPDatabase> {
-  return openDB(`hotbox-${org}`, 3, {
+  return openDB(`hotbox-${org}`, 4, {
     upgrade(db, oldVersion) {
-      // v1→v2: drop+recreate both stores to fix stale schema on existing IDB instances.
-      if (db.objectStoreNames.contains("keypairs"))  db.deleteObjectStore("keypairs");
-      if (db.objectStoreNames.contains("chat-keys")) db.deleteObjectStore("chat-keys");
-      db.createObjectStore("keypairs",  { keyPath: "id" });
-      db.createObjectStore("chat-keys", { keyPath: "id" });
+      if (oldVersion < 2) {
+        // v0/v1→v2: initial schema or first-ever install.
+        if (db.objectStoreNames.contains("keypairs"))  db.deleteObjectStore("keypairs");
+        if (db.objectStoreNames.contains("chat-keys")) db.deleteObjectStore("chat-keys");
+        db.createObjectStore("keypairs",  { keyPath: "id" });
+        db.createObjectStore("chat-keys", { keyPath: "id" });
+      }
+      if (oldVersion >= 2 && oldVersion < 4) {
+        // v2/v3→v4: evict chat-keys only — clears local-fallback keys written when
+        // /api/hotbox/keys returned 404 (pre-Supabase migration). keypairs are X25519
+        // identity keys — never evict.
+        if (db.objectStoreNames.contains("chat-keys")) db.deleteObjectStore("chat-keys");
+        db.createObjectStore("chat-keys", { keyPath: "id" });
+      }
     },
   });
 }
