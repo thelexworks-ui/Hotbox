@@ -2,7 +2,6 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Stars } from '@react-three/drei';
 import { EffectComposer, Bloom, ChromaticAberration, Vignette } from '@react-three/postprocessing';
 import * as THREE from 'three';
 
@@ -104,6 +103,44 @@ function nodeEmissive(s: NodeState, t: number, animate: boolean): number {
   const freq = s === 'fresh' ? (Math.PI * 2 / 3) : (Math.PI * 2 / 5);
   const pulse = 0.5 + 0.5 * Math.sin(t * freq);
   return base * (0.6 + pulse * 0.4);
+}
+
+// ── Native star field (replaces @react-three/drei Stars — react@18 compatible) ──
+
+function NativeStars({ count = 2400, radius = 17, factor = 0.8 }: { count?: number; radius?: number; factor?: number }) {
+  const geo = useMemo(() => {
+    const positions = new Float32Array(count * 3);
+    const colors    = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi   = Math.acos(2 * Math.random() - 1);
+      const r     = radius * (0.8 + Math.random() * 0.2);
+      positions[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
+      positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      positions[i * 3 + 2] = r * Math.cos(phi);
+      const bright = 0.70 + Math.random() * 0.30;
+      colors[i * 3]     = bright * 0.85;
+      colors[i * 3 + 1] = bright * 0.92;
+      colors[i * 3 + 2] = bright;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    g.setAttribute('color',    new THREE.BufferAttribute(colors, 3));
+    return g;
+  }, [count, radius]);
+
+  return (
+    <points geometry={geo}>
+      <pointsMaterial
+        size={factor * 0.12}
+        sizeAttenuation
+        vertexColors
+        transparent
+        opacity={0.85}
+        depthWrite={false}
+      />
+    </points>
+  );
 }
 
 // ── Soft-circle canvas texture ────────────────────────────────────────────────
@@ -567,7 +604,7 @@ function Scene({ animate }: { animate: boolean }) {
 
   return (
     <>
-      <Stars radius={17} depth={10} count={2400} factor={0.8} saturation={0.1} fade={false} />
+      <NativeStars radius={17} count={2400} factor={0.8} />
       <BokehLayer animate={animate} />
       <OrgNucleus animate={animate} />
       <IcosphereWireframe edges={edges} nucleusPositions={nucleusNearby} />
