@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { EffectComposer, Bloom, ChromaticAberration, Vignette } from '@react-three/postprocessing';
 import * as THREE from 'three';
 
-// ── Palette ───────────────────────────────────────────────────────────────────
+// â”€â”€ Palette â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const P = {
   edgeIceBlue:     '#8FE8F5',
@@ -21,9 +22,10 @@ const P = {
   bg:              '#050C14',
   starWhite:       '#D8E8EE',
   edgeStale:       '#3A4855',
+  agentEdge:       '#00D4FF',
 } as const;
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type NodeState = 'fresh' | 'warming' | 'stale' | 'cold';
 
@@ -33,7 +35,7 @@ interface AgentData {
   state: NodeState;
 }
 
-// ── Icosphere helpers ─────────────────────────────────────────────────────────
+// â”€â”€ Icosphere helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function getIcosphereVertices(detail: number): THREE.Vector3[] {
   const geo = new THREE.IcosahedronGeometry(1, detail);
@@ -83,7 +85,7 @@ function getIcosphereEdges(
   return edges;
 }
 
-// ── Node state helpers ────────────────────────────────────────────────────────
+// â”€â”€ Node state helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function stateHaloColor(s: NodeState): string {
   switch (s) {
@@ -105,7 +107,7 @@ function nodeEmissive(s: NodeState, t: number, animate: boolean): number {
   return base * (0.6 + pulse * 0.4);
 }
 
-// ── Native star field (replaces @react-three/drei Stars — react@18 compatible) ──
+// â”€â”€ Native star field (replaces @react-three/drei Stars â€” react@18 compatible) â”€â”€
 
 function NativeStars({ count = 2400, radius = 17, factor = 0.8 }: { count?: number; radius?: number; factor?: number }) {
   const geo = useMemo(() => {
@@ -143,7 +145,7 @@ function NativeStars({ count = 2400, radius = 17, factor = 0.8 }: { count?: numb
   );
 }
 
-// ── Soft-circle canvas texture ────────────────────────────────────────────────
+// â”€â”€ Soft-circle canvas texture â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function makeSoftCircle(): THREE.CanvasTexture {
   const s = 128;
@@ -160,7 +162,7 @@ function makeSoftCircle(): THREE.CanvasTexture {
   return new THREE.CanvasTexture(cv);
 }
 
-// ── Bokeh layer ───────────────────────────────────────────────────────────────
+// â”€â”€ Bokeh layer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface BokehDef {
   pos: [number, number, number];
@@ -224,7 +226,7 @@ function BokehSprite({ def, tex, animate }: { def: BokehDef; tex: THREE.CanvasTe
   );
 }
 
-// ── Org nucleus ───────────────────────────────────────────────────────────────
+// â”€â”€ Org nucleus â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function OrgNucleus({ animate }: { animate: boolean }) {
   const rimRef = useRef<THREE.Mesh>(null);
@@ -293,18 +295,33 @@ function OrgNucleus({ animate }: { animate: boolean }) {
   );
 }
 
-// ── Agent node ────────────────────────────────────────────────────────────────
+// â”€â”€ Agent node â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function AgentNodeMesh({
-  position, agent, animate, flashing,
+  position, agent, animate, flashing, onSelect,
 }: {
   position: THREE.Vector3;
   agent: AgentData;
   animate: boolean;
   flashing: boolean;
+  onSelect?: (sx: number, sy: number) => void;
 }) {
   const coreRef  = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
+  const { camera, size } = useThree();
+
+  const handleSelect = useCallback(() => {
+    if (!onSelect) return;
+    const projected = position.clone().project(camera);
+    const sx = (projected.x * 0.5 + 0.5) * size.width;
+    const sy = (-(projected.y * 0.5) + 0.5) * size.height;
+    onSelect(sx, sy);
+  }, [position, camera, size, onSelect]);
+
+  useEffect(() => {
+    document.body.style.cursor = hovered && onSelect ? 'pointer' : 'auto';
+    return () => { document.body.style.cursor = 'auto'; };
+  }, [hovered, onSelect]);
   const haloTex  = useMemo(() => makeSoftCircle(), []);
   const haloColor = stateHaloColor(agent.state);
   const haloSize  = agent.state === 'fresh' ? 0.12 : agent.state === 'warming' ? 0.10 : 0.05;
@@ -330,6 +347,7 @@ function AgentNodeMesh({
         ref={coreRef}
         onPointerOver={() => setHovered(true)}
         onPointerOut={() => setHovered(false)}
+        onPointerDown={(e) => { e.stopPropagation(); handleSelect(); }}
       >
         <sphereGeometry args={[0.028, 12, 12]} />
         <meshBasicMaterial
@@ -355,7 +373,7 @@ function AgentNodeMesh({
   );
 }
 
-// ── Wireframe + nucleus edges ─────────────────────────────────────────────────
+// â”€â”€ Wireframe + nucleus edges â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function IcosphereWireframe({
   edges, nucleusPositions,
@@ -405,7 +423,7 @@ function IcosphereWireframe({
   );
 }
 
-// ── Packet system ─────────────────────────────────────────────────────────────
+// â”€â”€ Packet system â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const PACKET_SPEED = 0.35;
 const TRAIL_POINTS = 8;
@@ -531,7 +549,7 @@ function PacketLayer({
   );
 }
 
-// ── Data hook ─────────────────────────────────────────────────────────────────
+// â”€â”€ Data hook â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function presenceToState(s: string): NodeState {
   if (s === 'online')  return 'fresh';
@@ -574,9 +592,38 @@ function useAgentData(): AgentData[] {
   return agents;
 }
 
-// ── Scene ─────────────────────────────────────────────────────────────────────
+// â”€â”€ Scene â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function Scene({ animate }: { animate: boolean }) {
+
+// -- Agent-to-agent curved bezier edges -----------------------------------------
+
+function CurvedAgentEdges({ edges }: { edges: [THREE.Vector3, THREE.Vector3][] }) {
+  const geometry = useMemo(() => {
+    const pts: number[] = [];
+    const SEGS = 24;
+    for (const [a, b] of edges) {
+      const mid  = a.clone().lerp(b, 0.5);
+      const ctrl = mid.clone().multiplyScalar(1.55 + mid.length() * 0.25);
+      const curve = new THREE.QuadraticBezierCurve3(a, ctrl, b);
+      const samples = curve.getPoints(SEGS);
+      for (let i = 0; i < samples.length - 1; i++) {
+        const p = samples[i], q = samples[i + 1];
+        pts.push(p.x, p.y, p.z, q.x, q.y, q.z);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    return g;
+  }, [edges]);
+  return (
+    <lineSegments geometry={geometry}>
+      <lineBasicMaterial color={P.agentEdge} transparent opacity={0.22}
+        blending={THREE.AdditiveBlending} depthWrite={false} />
+    </lineSegments>
+  );
+}
+
+function Scene({ animate, onNodeSelect }: { animate: boolean; onNodeSelect?: (agent: AgentData, sx: number, sy: number) => void }) {
   const agents = useAgentData();
   const [flashSet, setFlashSet] = useState<Set<number>>(new Set());
   const { scene } = useThree();
@@ -600,6 +647,28 @@ function Scene({ animate }: { animate: boolean }) {
     return { agentPositions: positions, edges: allEdges, nucleusNearby: nearby };
   }, [agents]);
 
+  const agentEdges = useMemo<[THREE.Vector3, THREE.Vector3][]>(() => {
+    if (agentPositions.length < 2) return [];
+    const result: [THREE.Vector3, THREE.Vector3][] = [];
+    const seen = new Set<string>();
+    for (let i = 0; i < agentPositions.length; i++) {
+      const a = agentPositions[i];
+      const sorted = agentPositions
+        .map((b, j) => ({ j, d: a.distanceTo(b) }))
+        .filter(({ j }) => j !== i)
+        .sort((x, y) => x.d - y.d)
+        .slice(0, 2);
+      for (const { j } of sorted) {
+        const key = `${Math.min(i, j)},${Math.max(i, j)}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          result.push([a, agentPositions[j]]);
+        }
+      }
+    }
+    return result;
+  }, [agentPositions]);
+
   if (agents.length === 0) return null;
 
   return (
@@ -608,6 +677,7 @@ function Scene({ animate }: { animate: boolean }) {
       <BokehLayer animate={animate} />
       <OrgNucleus animate={animate} />
       <IcosphereWireframe edges={edges} nucleusPositions={nucleusNearby} />
+      <CurvedAgentEdges edges={agentEdges} />
       {agents.slice(0, agentPositions.length).map((agent, i) => (
         <AgentNodeMesh
           key={agent.id}
@@ -615,6 +685,7 @@ function Scene({ animate }: { animate: boolean }) {
           agent={agent}
           animate={animate}
           flashing={flashSet.has(i)}
+          onSelect={onNodeSelect ? (sx, sy) => onNodeSelect(agent, sx, sy) : undefined}
         />
       ))}
       {animate && (
@@ -624,7 +695,7 @@ function Scene({ animate }: { animate: boolean }) {
   );
 }
 
-// ── Camera auto-orbit ─────────────────────────────────────────────────────────
+// â”€â”€ Camera auto-orbit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function CameraRig({ animate }: { animate: boolean }) {
   const { camera } = useThree();
@@ -670,9 +741,9 @@ function CameraRig({ animate }: { animate: boolean }) {
   return null;
 }
 
-// ── Post-processing — UnsignedByteType framebuffer for iOS Safari compatibility ──
+// â”€â”€ Post-processing â€” UnsignedByteType framebuffer for iOS Safari compatibility â”€â”€
 // Default HalfFloatType render targets fail on mobile Safari (texture format not
-// guaranteed). mipmapBlur dropped — requires MRT not available on all WebGL 2 impls.
+// guaranteed). mipmapBlur dropped â€” requires MRT not available on all WebGL 2 impls.
 
 function PostFX() {
   const chromaOffset = useRef(new THREE.Vector2(0.0004, 0.0003));
@@ -689,15 +760,116 @@ function PostFX() {
   );
 }
 
-// ── Root ──────────────────────────────────────────────────────────────────────
+// â”€â”€ Root â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG ?? 'toadsage';
 
-export default function NeuralGlobe({ prefersReduced }: { prefersReduced: boolean }) {
-  const animate = !prefersReduced;
+// -- Node popover ---------------------------------------------------------------
+
+function NodePopover({
+  agent, sx, sy, containerW, containerH, onClose,
+}: {
+  agent: AgentData;
+  sx: number;
+  sy: number;
+  containerW: number;
+  containerH?: number;
+  onClose(): void;
+}) {
+  const router = useRouter();
+  const popLeft = sx > containerW * 0.6;
+  const channelId = agent.id.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+  const POPOVER_W = 220;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const posStyle: React.CSSProperties = popLeft
+    ? { right: containerW - sx + 12 }
+    : { left: sx + 12 };
 
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+    <div
+      style={{
+        position: 'absolute',
+        top: Math.min(sy, Math.max(0, (containerH ?? 600) - 180)),
+        ...posStyle,
+        width: POPOVER_W,
+        background: 'rgba(5,12,20,0.92)',
+        border: '1px solid rgba(143,232,245,0.18)',
+        borderRadius: 12,
+        padding: '14px 16px',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        color: '#C8ECF4',
+        fontFamily: 'monospace',
+        fontSize: 12,
+        letterSpacing: '0.04em',
+        zIndex: 30,
+        boxShadow: '0 0 32px rgba(0,212,255,0.08)',
+        pointerEvents: 'all',
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+        <span style={{ color: '#8FE8F5', fontWeight: 700, fontSize: 13 }}>{agent.name}</span>
+        <button
+          onClick={onClose}
+          style={{ background: 'none', border: 'none', color: '#8FE8F5', cursor: 'pointer',
+            fontSize: 14, opacity: 0.6, lineHeight: 1, padding: '0 0 0 8px' }}
+        >
+          ✕
+        </button>
+      </div>
+      <div style={{ marginBottom: 4, opacity: 0.7 }}>
+        state:{' '}
+        <span style={{ color: agent.state === 'fresh' ? '#00D4FF' : agent.state === 'warming' ? '#FFAF2A' : '#8FE8F5' }}>
+          {agent.state}
+        </span>
+      </div>
+      <div style={{ marginBottom: 12, opacity: 0.5, wordBreak: 'break-all' }}>id: {agent.id}</div>
+      <button
+        onClick={() => { router.push(`/channels/${channelId}`); onClose(); }}
+        style={{
+          width: '100%',
+          background: 'rgba(0,212,255,0.12)',
+          border: '1px solid rgba(0,212,255,0.3)',
+          borderRadius: 6,
+          color: '#00D4FF',
+          fontFamily: 'monospace',
+          fontSize: 11,
+          letterSpacing: '0.06em',
+          padding: '6px 10px',
+          cursor: 'pointer',
+          textTransform: 'uppercase',
+        }}
+      >
+        → Hotbox channel
+      </button>
+    </div>
+  );
+}
+
+export default function NeuralGlobe({ prefersReduced }: { prefersReduced: boolean }) {
+  const animate = !prefersReduced;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [selectedNode, setSelectedNode] = useState<{
+    agent: AgentData; sx: number; sy: number;
+  } | null>(null);
+
+  const handleNodeSelect = useCallback((agent: AgentData, sx: number, sy: number) => {
+    setSelectedNode((prev) => (prev?.agent.id === agent.id ? null : { agent, sx, sy }));
+  }, []);
+
+  const handleClose = useCallback(() => setSelectedNode(null), []);
+
+  return (
+    <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}
+      onClick={handleClose}
+    >
       <Canvas
         camera={{ fov: 55, near: 0.1, far: 100, position: [0, 0.4, 2.8] }}
         gl={{
@@ -708,10 +880,21 @@ export default function NeuralGlobe({ prefersReduced }: { prefersReduced: boolea
         }}
         dpr={[1, 2]}
       >
-        <Scene animate={animate} />
+        <Scene animate={animate} onNodeSelect={handleNodeSelect} />
         <CameraRig animate={animate} />
         <PostFX />
       </Canvas>
+
+      {selectedNode && containerRef.current && (
+        <NodePopover
+          agent={selectedNode.agent}
+          sx={selectedNode.sx}
+          sy={selectedNode.sy}
+          containerW={containerRef.current.clientWidth}
+          containerH={containerRef.current.clientHeight}
+          onClose={handleClose}
+        />
+      )}
 
       <div style={{
         position: 'absolute', top: 16, left: 20,
@@ -719,7 +902,7 @@ export default function NeuralGlobe({ prefersReduced }: { prefersReduced: boolea
         opacity: 0.55, letterSpacing: '0.08em', textTransform: 'uppercase',
         pointerEvents: 'none', userSelect: 'none',
       }}>
-        {ORG} · neural link v2
+        {ORG} Â· neural link v2
       </div>
 
       {prefersReduced && (
@@ -729,7 +912,7 @@ export default function NeuralGlobe({ prefersReduced }: { prefersReduced: boolea
           padding: '4px 8px', border: `1px solid ${P.edgeDeep}`,
           borderRadius: 4, pointerEvents: 'none',
         }}>
-          3D view — motion paused
+          3D view â€” motion paused
         </div>
       )}
     </div>
