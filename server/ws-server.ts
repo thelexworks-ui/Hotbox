@@ -75,7 +75,7 @@ type ClientMessage =
   | { type: 'typing.start';  channel_id: string }
   | { type: 'typing.stop';   channel_id: string }
   | { type: 'presence.set';  status: PresenceStatus }
-  | { type: 'replay';        since: string }
+  | { type: 'replay';        since?: string; after_id?: string }
   | { type: 'ping' };
 
 // --------------------------------------------------------------------------
@@ -169,6 +169,39 @@ function readMessagesSince(org: string, channelId: string, since: string): Hotbo
       } catch { /* skip corrupt line */ }
     }
   }
+  return results;
+}
+
+// E: replay by message ID cursor — falls back to readMessagesSince if anchor not found in window
+function readMessagesAfterId(org: string, channelId: string, afterId: string, since?: string): HotboxMessage[] {
+  const dir = messagesDir(org, channelId);
+  if (!fs.existsSync(dir)) return [];
+
+  const cutoff = new Date(Date.now() - REPLAY_MAX_HOURS * 3600_000).toISOString().slice(0, 10);
+  const results: HotboxMessage[] = [];
+  let foundAnchor = false;
+
+  const files = fs.readdirSync(dir)
+    .filter(f => f.endsWith('.jsonl') && f.slice(0, 10) >= cutoff)
+    .sort();
+
+  for (const file of files) {
+    const lines = fs.readFileSync(path.join(dir, file), 'utf8').split('\n').filter(Boolean);
+    for (const line of lines) {
+      try {
+        const msg = JSON.parse(line) as HotboxMessage;
+        if (!foundAnchor) {
+          if (msg.id === afterId) foundAnchor = true;
+          continue;
+        }
+        results.push(msg);
+        if (results.length >= REPLAY_MAX_EVENTS) return results;
+      } catch { /* skip corrupt line */ }
+    }
+  }
+
+  // Anchor not found in window (e.g. rotated off) — fall back to since-timestamp
+  if (!foundAnchor) return readMessagesSince(org, channelId, since ?? new Date(0).toISOString());
   return results;
 }
 
@@ -295,7 +328,7 @@ function handleClientMessage(session: ClientSession, raw: string): void {
       };
       try { writeMessage(message); } catch (e) { console.error('[ws] writeMessage failed:', e); }
       session.last_seen_ts = message.ts;
-      // Broadcast ack to ALL sessions of this member � handles mid-reconnect race where
+      // Broadcast ack to ALL sessions of this member � handles mid-reconnect race where
       // the sending session's WS may be closing before the ack can be delivered.
       const ackMsg = { type: 'msg.ack', nonce: msg.nonce, message_id: message.id, ts: message.ts, channel_id: msg.channel_id };
       for (const [, s] of sessions) {
@@ -374,9 +407,10 @@ function handleClientMessage(session: ClientSession, raw: string): void {
     }
 
     case 'replay': {
-      // Replay missed events for all subscribed channels
       for (const channelId of session.subscribed_channels) {
-        const messages = readMessagesSince(session.org_id, channelId, msg.since);
+        const messages = msg.after_id
+          ? readMessagesAfterId(session.org_id, channelId, msg.after_id, msg.since)
+          : readMessagesSince(session.org_id, channelId, msg.since ?? new Date(0).toISOString());
         for (const m of messages) {
           send(session.ws, { type: 'msg.new', message: m });
         }
