@@ -3,7 +3,6 @@ import { createClient, type SupabaseClient, type RealtimeChannel } from '@supaba
 import {
   createAgentChannel,
   bootstrapWorkspace,
-  writeCursor,
   channelExists,
   appendSystemMessage,
   type AgentRole,
@@ -61,47 +60,45 @@ function buildSupabaseClient(): SupabaseClient {
 }
 
 export async function backfillAgentChannels(org: string): Promise<void> {
-  bootstrapWorkspace(org);
+  await bootstrapWorkspace(org);
   const agents = await ipcListAgents(org);
   for (const agentName of agents) {
     const channelId = `agent-${agentName}`;
-    if (!channelExists(org, channelId)) {
-      createAgentChannel({ org, agentName });
+    if (!(await channelExists(org, channelId))) {
+      await createAgentChannel({ org, agentName });
       console.log(`[hotbox-onboarding] backfill: created #${channelId}`);
     }
   }
-  writeCursor(org, new Date().toISOString());
 }
 
-function handleAgentCreated(meta: AgentCreatedMeta): void {
+async function handleAgentCreated(meta: AgentCreatedMeta): Promise<void> {
   const agentRole: AgentRole =
     meta.agent_role === 'orchestrator' ? 'orchestrator'
     : meta.agent_role === 'analyst' ? 'analyst'
     : 'agent';
 
-  const channel = createAgentChannel({ org: meta.org, agentName: meta.agent, agentRole });
+  const channel = await createAgentChannel({ org: meta.org, agentName: meta.agent, agentRole });
   if (channel) {
     console.log(`[hotbox-onboarding] created #agent-${meta.agent} (role=${agentRole})`);
-    writeCursor(meta.org, meta.timestamp);
   }
 }
 
-function handleAgentStarted(meta: AgentLifecycleMeta): void {
+async function handleAgentStarted(meta: AgentLifecycleMeta): Promise<void> {
   presenceMap.set(meta.agent, 'online');
   const channelId = `agent-${meta.agent}`;
-  if (channelExists(meta.org, channelId)) appendSystemMessage(meta.org, channelId, `${meta.agent} is online`);
+  if (await channelExists(meta.org, channelId)) await appendSystemMessage(meta.org, channelId, `${meta.agent} is online`);
 }
 
-function handleAgentStopped(meta: AgentLifecycleMeta): void {
+async function handleAgentStopped(meta: AgentLifecycleMeta): Promise<void> {
   presenceMap.set(meta.agent, 'offline');
   const channelId = `agent-${meta.agent}`;
-  if (channelExists(meta.org, channelId)) appendSystemMessage(meta.org, channelId, `${meta.agent} went offline`);
+  if (await channelExists(meta.org, channelId)) await appendSystemMessage(meta.org, channelId, `${meta.agent} went offline`);
 }
 
-function handleAgentCrashed(meta: AgentLifecycleMeta): void {
+async function handleAgentCrashed(meta: AgentLifecycleMeta): Promise<void> {
   presenceMap.set(meta.agent, 'crashed');
   const channelId = `agent-${meta.agent}`;
-  if (channelExists(meta.org, channelId)) appendSystemMessage(meta.org, channelId, `${meta.agent} crashed`);
+  if (await channelExists(meta.org, channelId)) await appendSystemMessage(meta.org, channelId, `${meta.agent} crashed`);
 }
 
 export function subscribeToAgentLifecycle(supabase: SupabaseClient, org: string): RealtimeChannel {
@@ -116,10 +113,10 @@ export function subscribeToAgentLifecycle(supabase: SupabaseClient, org: string)
         if (row.org_id !== org) return;
         const meta = row.meta;
         switch (row.event) {
-          case 'agent_created':  handleAgentCreated(meta as AgentCreatedMeta); break;
-          case 'agent_started':  handleAgentStarted(meta); break;
-          case 'agent_stopped':  handleAgentStopped(meta); break;
-          case 'agent_crashed':  handleAgentCrashed(meta); break;
+          case 'agent_created':  void handleAgentCreated(meta as AgentCreatedMeta); break;
+          case 'agent_started':  void handleAgentStarted(meta); break;
+          case 'agent_stopped':  void handleAgentStopped(meta); break;
+          case 'agent_crashed':  void handleAgentCrashed(meta); break;
         }
       },
     )
