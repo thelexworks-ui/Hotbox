@@ -67,6 +67,7 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
   // ---------- Internal: fetch CK from server, cache in IDB ----------
 
   const getCK = useCallback(async (chatId: string, caller: 'encrypt' | 'decrypt' | 'evict-retry' = 'decrypt'): Promise<CryptoKey> => {
+    console.log(`[keystore:getCK:enter] caller=${caller} kid=${chatId} db_ready=${!!dbRef.current}`);
     const db = dbRef.current!;
     const t0 = Date.now();
     const cached = await (db as IDBPDatabase<HotboxDBSchema>).get('chat-keys', chatId);

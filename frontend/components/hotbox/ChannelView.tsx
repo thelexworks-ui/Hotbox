@@ -31,17 +31,20 @@ function MessageRow({ msg }: { msg: AnyMessage }) {
     if (!isHotboxMsg(msg)) { setText(msg.content); return; }
     // Optimistic messages carry _text directly (no decryption needed)
     if (msg._text) { setText(msg._text); return; }
-    decrypt(msg.crypto_envelope)
+    const env = msg.crypto_envelope;
+    console.log('[MessageRow:decrypt-call] kid=' + (env?.kid ?? 'MISSING') + ' env_present=' + !!env);
+    decrypt(env)
       .then((t) => setText(t))
-      .catch(async () => {
+      .catch(async (firstErr) => {
         // IDB CK may be stale (prior session, key rotation, or concurrent auto-gen race).
         // Evict and re-fetch from server — one retry only to avoid infinite loops.
+        console.warn('[MessageRow:decrypt-first-fail] kid=' + (env?.kid ?? 'MISSING'), firstErr);
         try {
-          await evictCK(msg.crypto_envelope.kid);
-          const t = await decrypt(msg.crypto_envelope);
+          await evictCK(env?.kid ?? '');
+          const t = await decrypt(env);
           setText(t);
         } catch (retryErr) {
-          console.error('[keystore:decrypt-retry] FAILED kid=' + msg.crypto_envelope.kid + ' v=' + msg.crypto_envelope.v, retryErr);
+          console.error('[keystore:decrypt-retry] FAILED kid=' + (env?.kid ?? 'MISSING') + ' v=' + (env?.v ?? '?'), retryErr);
           setText('[decryption failed]');
         }
       });
