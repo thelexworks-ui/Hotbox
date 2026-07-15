@@ -55,7 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: { channelId: 
     fetch(`${WS_INTERNAL_URL}/internal/fanout`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-internal-secret': INTERNAL_SECRET },
-      body: JSON.stringify({ org, channelId: params.channelId, message: { type: 'msg.new', message: msg } }),
+      body: JSON.stringify({ org, channelId: params.channelId, excludeSenderId: sender_id, message: { type: 'msg.new', message: msg } }),
     }).catch((err) => console.warn('[messages-route] internal fanOut failed:', err));
   } else {
     console.warn('[messages-route] HOTBOX_INTERNAL_SECRET not set — WS fanOut skipped on HTTP fallback');

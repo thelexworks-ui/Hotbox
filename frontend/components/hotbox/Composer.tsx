@@ -129,7 +129,9 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
         pendingRef.current.delete(nonce);
         if (res.ok) {
           const confirmed = await res.json() as HotboxMessage;
-          reconcilePending(channelId, nonce, confirmed);
+          // Preserve plaintext from the optimistic so MessageRow shows it directly
+          // without requiring a decrypt round-trip (same as the msg.ack WS path).
+          reconcilePending(channelId, nonce, { ...confirmed, _text: trimmed, _pending: false });
         } else {
           // HTTP also failed — retract optimistic message rather than leaving it stuck
           removeMessage(channelId, nonce);

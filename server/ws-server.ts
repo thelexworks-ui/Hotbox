@@ -528,8 +528,17 @@ const httpServer = createServer((req, res) => {
     req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
     req.on('end', () => {
       try {
-        const { org, channelId, message } = JSON.parse(body) as { org: string; channelId: string; message: object };
-        fanOut(org, channelId, message);
+        const { org, channelId, message, excludeSenderId } = JSON.parse(body) as { org: string; channelId: string; message: object; excludeSenderId?: string };
+        // Mirror the WS path: exclude the sender's own WS sessions from receiving msg.new echo.
+        const subs = orgChannelSubs.get(org)?.get(channelId);
+        if (subs) {
+          for (const sid of subs) {
+            const s = sessions.get(sid);
+            if (!s) continue;
+            if (excludeSenderId && s.member_id === excludeSenderId) continue;
+            send(s.ws, message);
+          }
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true }));
       } catch {
