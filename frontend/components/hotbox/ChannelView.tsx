@@ -39,7 +39,8 @@ function MessageRow({ msg }: { msg: AnyMessage }) {
           await evictCK(msg.crypto_envelope.kid);
           const t = await decrypt(msg.crypto_envelope);
           setText(t);
-        } catch {
+        } catch (retryErr) {
+          console.error('[keystore:decrypt-retry] FAILED kid=' + msg.crypto_envelope.kid + ' v=' + msg.crypto_envelope.v, retryErr);
           setText('[decryption failed]');
         }
       });

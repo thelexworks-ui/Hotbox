@@ -66,10 +66,12 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
 
   // ---------- Internal: fetch CK from server, cache in IDB ----------
 
-  const getCK = useCallback(async (chatId: string): Promise<CryptoKey> => {
+  const getCK = useCallback(async (chatId: string, caller: 'encrypt' | 'decrypt' | 'evict-retry' = 'decrypt'): Promise<CryptoKey> => {
     const db = dbRef.current!;
+    const t0 = Date.now();
     const cached = await (db as IDBPDatabase<HotboxDBSchema>).get('chat-keys', chatId);
     if (cached) {
+      console.log(`[keystore:getCK] caller=${caller} kid=${chatId} source=idb t=${t0}`);
       return crypto.subtle.importKey('raw', cached.ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
     }
 
@@ -78,6 +80,8 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
     const { ck } = await res.json() as { ck: string };
 
     const ckBytes = b64ToBytes(ck);
+    // Log first 8 chars of raw b64 as a fingerprint to detect server-vs-IDB divergence
+    console.log(`[keystore:getCK] caller=${caller} kid=${chatId} source=server ck_fp=${ck.slice(0, 8)} t=${t0} fetch_ms=${Date.now() - t0}`);
     await (db as IDBPDatabase<HotboxDBSchema>).put('chat-keys', { id: chatId, ckBytes, cached_at: new Date().toISOString() });
     return crypto.subtle.importKey('raw', ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
   }, []);
@@ -93,7 +97,7 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
   // ---------- Exposed: encrypt ----------
 
   const encrypt = useCallback(async (chatId: string, plaintext: string): Promise<AegisEnvelope> => {
-    const ck = await getCK(chatId);
+    const ck = await getCK(chatId, 'encrypt');
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const cipherbytes = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, ck, new TextEncoder().encode(plaintext));
     const ct = new Uint8Array(cipherbytes);
@@ -110,7 +114,7 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
   // ---------- Exposed: decrypt ----------
 
   const decrypt = useCallback(async (envelope: AegisEnvelope): Promise<string> => {
-    const ck = await getCK(envelope.kid);
+    const ck = await getCK(envelope.kid, 'decrypt');
     const ct = new Uint8Array(b64ToBytes(envelope.ciphertext));
     const tag = new Uint8Array(b64ToBytes(envelope.tag));
     const ctWithTag = new Uint8Array(new ArrayBuffer(ct.length + tag.length));
