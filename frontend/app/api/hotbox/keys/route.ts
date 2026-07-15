@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { persistenceProbe, loadChannelKey } from '@/lib/hotbox/keys-store';
+import { randomBytes } from 'node:crypto';
+import { persistenceProbe, loadChannelKey, storeChannelKey } from '@/lib/hotbox/keys-store';
 
 export const runtime = 'nodejs';
 
@@ -20,8 +21,14 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const ck = await loadChannelKey(org, chat);
-    if (!ck) return NextResponse.json({ error: 'not found' }, { status: 404 });
+    let ck = await loadChannelKey(org, chat);
+    if (!ck) {
+      // Self-heal: channel exists but key was never written (fire-and-forget race at
+      // create time, or channel predates the server-key pivot). Generate and store now.
+      ck = randomBytes(32).toString('base64');
+      await storeChannelKey(org, chat, ck);
+      console.log('[keys-route] auto-generated missing CK for channel:', chat);
+    }
     return NextResponse.json({ ck });
   } catch {
     return NextResponse.json({ error: 'key lookup failed' }, { status: 500 });

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { webcrypto } from 'node:crypto';
 import { validateMasterKey } from '@/lib/hotbox/master-key';
-import { loadChannelKey } from '@/lib/hotbox/keys-store';
+import { loadChannelKey, storeChannelKey } from '@/lib/hotbox/keys-store';
 import { appendMessage, createChannel, channelExists } from '@/lib/hotbox/channel-service';
 import type { AegisEnvelope } from '@/lib/hotbox/types';
 
@@ -57,13 +57,12 @@ export async function POST(req: NextRequest) {
     await createChannel({ org, name: channel, type }).catch(() => {/* race — already exists */});
   }
 
-  // Fetch server-held channel key
-  const ckB64 = await loadChannelKey(org, channel);
+  // Fetch server-held channel key; auto-generate if missing (pre-pivot channel or lost race)
+  let ckB64 = await loadChannelKey(org, channel);
   if (!ckB64) {
-    return NextResponse.json(
-      { error: 'no channel key for this channel — channel may not be initialised yet' },
-      { status: 404 },
-    );
+    ckB64 = Buffer.from(webcrypto.getRandomValues(new Uint8Array(32))).toString('base64');
+    await storeChannelKey(org, channel, ckB64);
+    console.log('[send-as] auto-generated missing CK for channel:', channel);
   }
 
   let envelope: AegisEnvelope;
