@@ -347,7 +347,7 @@ function AgentNodeMesh({
         ref={coreRef}
         onPointerOver={() => setHovered(true)}
         onPointerOut={() => setHovered(false)}
-        onPointerDown={(e) => { e.stopPropagation(); handleSelect(); }}
+        onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopPropagation(); handleSelect(); }}
       >
         <sphereGeometry args={[0.028, 12, 12]} />
         <meshBasicMaterial
