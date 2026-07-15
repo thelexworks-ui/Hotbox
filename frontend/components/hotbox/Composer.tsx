@@ -25,6 +25,7 @@ interface MsgAck {
 export function Composer({ channelId, threadParentId, disabled }: Props) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const { send, status, subscribe } = useWs();
   const { encrypt, ready: keystoreReady, keyLossAckRequired } = useKeystore();
   const { memberId } = useAuth();
@@ -82,9 +83,11 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
     const trimmed = text.trim();
     if (!trimmed || isDisabled) return;
     setSending(true);
+    setSendError(null);
+    let nonce: string | null = null;
     try {
       const envelope = await encrypt(channelId, trimmed);
-      const nonce = crypto.randomUUID();
+      nonce = crypto.randomUUID();
 
       // Optimistic message — shows immediately with typed text, pending flag for opacity
       const optimistic: HotboxMessage = {
@@ -130,6 +133,7 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
         } else {
           // HTTP also failed — retract optimistic message rather than leaving it stuck
           removeMessage(channelId, nonce);
+          throw new Error(`HTTP send failed: ${res.status}`);
         }
       }
 
@@ -140,8 +144,13 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
         textareaRef.current.style.height = 'auto';
         textareaRef.current.focus();
       }
-    } catch { /* non-fatal */ }
-    finally { setSending(false); }
+    } catch (err) {
+      console.error('[composer] send failed:', err);
+      if (nonce) removeMessage(channelId, nonce);
+      setSendError('Failed to send — keystore unavailable or connection lost. Try again.');
+    } finally {
+      setSending(false);
+    }
   }, [text, isDisabled, encrypt, send, channelId, threadParentId, memberId, appendMessage, reconcilePending, removeMessage, emitTyping]);
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -203,6 +212,11 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
       {status !== 'open' && !keyLossAckRequired && (
         <p className="text-[11px] text-[var(--hotbox-mention)] mt-1 px-1">
           WS {status} — messages routing via HTTP
+        </p>
+      )}
+      {sendError && (
+        <p className="text-[11px] text-[var(--hotbox-crashed)] mt-1 px-1">
+          {sendError}
         </p>
       )}
     </div>

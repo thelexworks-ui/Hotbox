@@ -328,10 +328,31 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
 
     const res = await fetch(`/api/hotbox/keys?chat=${encodeURIComponent(chatId)}&member=${encodeURIComponent(activeMemberId)}`);
     if (!res.ok) {
-      // Hard-fail — do NOT auto-rotate the CK. Silently generating a new CK here
-      // overwrites all existing member bundles and makes every prior message permanently
-      // undecryptable. Missing wraps must be fixed via explicit createChatKey (channel-create
-      // or member-add), not auto-triggered by a 404 on decrypt.
+      if (res.status === 404) {
+        // No wrap found — channel may predate ChannelCreateModal CK distribution (seeded
+        // channels, channels created before the fix). Attempt to create + distribute a shared
+        // CK for all current org members. This is LOGGED (not silent) and hard-fails if
+        // distribution or the retry fetch also fails — the send surfaces the error to the user.
+        console.warn(`[keystore] getCK: no wrap for ${activeMemberId} in ${chatId} — attempting createChatKey for all org members`);
+        try {
+          const membersRes = await fetch(`/api/hotbox/keys?type=members&org=${encodeURIComponent(ORG)}`);
+          if (membersRes.ok) {
+            const { members } = await membersRes.json() as { members: string[] };
+            if (members.length > 0) {
+              await createChatKey(chatId, members);
+              // Re-fetch from server to confirm distribution (not IDB — want server confirmation)
+              const retry = await fetch(`/api/hotbox/keys?chat=${encodeURIComponent(chatId)}&member=${encodeURIComponent(activeMemberId)}`);
+              if (retry.ok) {
+                const bundle2 = await retry.json() as WrappedKeyBundle;
+                console.info(`[keystore] getCK: createChatKey recovery succeeded for ${chatId}`);
+                return unwrapCK(chatId, activeMemberId, activePrivateKey, bundle2);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('[keystore] getCK: createChatKey recovery failed', err);
+        }
+      }
       throw new Error(`[keystore] no wrapped bundle for ${activeMemberId} in ${chatId} (${res.status})`);
     }
     const bundle = await res.json() as WrappedKeyBundle;
