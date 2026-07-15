@@ -226,11 +226,12 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
     return () => { unsub1(); unsub2(); };
   }, [subscribe, appendChannel, setPresence]);
 
-  // CH3: append optimistic + re-fetch authoritative list
+  // CH3: append optimistic, close modal, re-fetch authoritative list, then navigate
   const handleChannelCreated = async (ch: ChannelMeta) => {
     appendChannel(ch);
     setShowCreate(false);
     await refetchChannels();
+    router.push(`/channels/${ch.id}`);
   };
 
   // CH4: manual refresh
@@ -258,7 +259,7 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
   const agentOverflow = sortedAgents.length - MAX_AGENTS_VISIBLE;
 
   const system = channels.filter((c) => c.type === 'system');
-  const topics = channels.filter((c) => c.type === 'topic');
+  const topics = channels.filter((c) => c.type === 'topic' || c.type === 'group');
   const dms    = channels.filter((c) => c.type === 'dm');
 
   return (

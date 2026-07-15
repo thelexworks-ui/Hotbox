@@ -6,7 +6,7 @@ import type { PresenceStatus } from '@/lib/hotbox/presence';
 export interface ChannelMeta {
   id: string;
   name: string;
-  type: 'system' | 'agent' | 'topic' | 'dm';
+  type: 'system' | 'agent' | 'topic' | 'group' | 'dm';
   org: string;
   agent_name?: string;
   agent_role?: 'orchestrator' | 'analyst' | 'agent';

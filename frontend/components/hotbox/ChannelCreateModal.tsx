@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useMembers, type Member } from '@/hooks/useMembers';
 import { MemberAvatar, RoleBadge } from './MembersPanel';
 import type { ChannelMeta } from '@/store/hotbox';
@@ -65,7 +64,6 @@ interface Props {
 }
 
 export function ChannelCreateModal({ onCreated, onClose }: Props) {
-  const router = useRouter();
   const allMembers = useMembers(30_000);
   const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState('');
@@ -120,8 +118,6 @@ export function ChannelCreateModal({ onCreated, onClose }: Props) {
       }
       const ch = await res.json() as ChannelMeta;
       onCreated(ch);
-      onClose();
-      router.push(`/channels/${ch.id}`);
     } catch {
       setCreateError(`Couldn't create the channel — check your connection and try again.`);
       setCreating(false);
