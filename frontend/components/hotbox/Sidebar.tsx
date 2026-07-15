@@ -1,15 +1,21 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useHotboxStore, type ChannelMeta, type PresenceStatus } from '@/store/hotbox';
 import { useWs } from './WsProvider';
+import { useAgents } from '@/hooks/useMembers';
+import { ChannelCreateModal } from './ChannelCreateModal';
+import { MembersPanel, RoleBadge } from './MembersPanel';
 
-const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG || 'toadsage';
-const WORKSPACE_NAME = process.env.NEXT_PUBLIC_HOTBOX_WORKSPACE_NAME || ORG;
+const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG ?? 'toadsage';
+const WORKSPACE_NAME = process.env.NEXT_PUBLIC_HOTBOX_WORKSPACE_NAME ?? ORG;
+const MAX_AGENTS_VISIBLE = 8;
 
-function PresenceDot({ status }: { status: PresenceStatus }) {
+// ── PresenceDot ──────────────────────────────────────────────────────────────
+
+function PresenceDot({ status, size = 8 }: { status: PresenceStatus; size?: number }) {
   const color =
     status === 'online'  ? 'var(--hotbox-online)'  :
     status === 'crashed' ? 'var(--hotbox-crashed)' : 'var(--hotbox-offline)';
@@ -17,13 +23,12 @@ function PresenceDot({ status }: { status: PresenceStatus }) {
   return (
     <span
       className="inline-block rounded-full flex-shrink-0"
-      style={{
-        width: 8, height: 8, background: color,
-        animation: pulse ? 'pulse-dot 2s ease-in-out infinite' : undefined,
-      }}
+      style={{ width: size, height: size, background: color, animation: pulse ? 'pulse-dot 2s ease-in-out infinite' : undefined }}
     />
   );
 }
+
+// ── Channel items ────────────────────────────────────────────────────────────
 
 function ChannelItem({ channel, onItemClick }: { channel: ChannelMeta; onItemClick?: () => void }) {
   const pathname = usePathname();
@@ -44,12 +49,8 @@ function ChannelItem({ channel, onItemClick }: { channel: ChannelMeta; onItemCli
           : 'text-[var(--hotbox-text-muted)] hover:bg-[var(--hotbox-surface)] hover:text-[var(--hotbox-text)]',
       ].join(' ')}
     >
-      {channel.agent_name && presence && (
-        <PresenceDot status={presence} />
-      )}
-      {!channel.agent_name && (
-        <span className="text-[var(--hotbox-text-dim)] text-xs leading-none">#</span>
-      )}
+      {channel.agent_name && presence && <PresenceDot status={presence} />}
+      {!channel.agent_name && <span className="text-[var(--hotbox-text-dim)] text-xs leading-none">#</span>}
       <span className="truncate flex-1 text-sm">{channel.name.replace(/^#/, '')}</span>
       {(channel.unread ?? 0) > 0 && (
         <span className="ml-auto bg-[var(--hotbox-accent)] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
@@ -72,123 +73,95 @@ function ChannelGroup({ label, channels, onItemClick }: { label: string; channel
   );
 }
 
-function CreateChannelModal({ onClose, onCreated }: { onClose(): void; onCreated(ch: ChannelMeta): void }) {
-  const [name, setName] = React.useState('');
-  const [busy, setBusy] = React.useState(false);
-  const [err, setErr]   = React.useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
+// ── Agents section ───────────────────────────────────────────────────────────
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = name.trim().replace(/^#/, '');
-    if (!trimmed) { setErr('Channel name required'); return; }
-    setBusy(true);
-    setErr('');
-    try {
-      const res = await fetch('/api/hotbox/channels', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ org: ORG, name: `#${trimmed}`, type: 'topic' }),
-      });
-      if (res.ok) {
-        const ch: ChannelMeta = await res.json();
-        onCreated(ch);
-      } else if (res.status === 409) {
-        setErr('A channel with that name already exists');
-        setBusy(false);
-      } else {
-        // Optimistic: create local channel even if server 500s
-        const optimistic: ChannelMeta = {
-          id: trimmed.toLowerCase().replace(/\s+/g, '-'),
-          name: `#${trimmed}`,
-          type: 'topic',
-          org: ORG,
-          pinned: false,
-          created_at: new Date().toISOString(),
-          members: [],
-        };
-        onCreated(optimistic);
-      }
-    } catch {
-      // Network failure — still add optimistically
-      const optimistic: ChannelMeta = {
-        id: name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-'),
-        name: `#${name.trim().replace(/^#/, '')}`,
-        type: 'topic',
-        org: ORG,
-        pinned: false,
-        created_at: new Date().toISOString(),
-        members: [],
-      };
-      onCreated(optimistic);
-    }
-  };
+function AgentItem({ id, name, role, status }: { id: string; name: string; role: string; status: PresenceStatus }) {
+  const pathname = usePathname();
+  const href = `/dm/${id}`;
+  const active = pathname.includes(id);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div
-        className="relative z-10 w-full max-w-sm rounded-lg shadow-xl p-5 flex flex-col gap-4"
-        style={{ background: 'var(--hotbox-surface-2)', border: '1px solid var(--hotbox-border)' }}
-      >
-        <h2 className="font-semibold text-base text-[var(--hotbox-text)]">Create a channel</h2>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-[var(--hotbox-text-muted)]" htmlFor="new-channel-name">
-              Channel name
-            </label>
-            <div
-              className="flex items-center gap-1.5 rounded px-3 py-2 border"
-              style={{ borderColor: err ? 'var(--hotbox-crashed)' : 'var(--hotbox-border)', background: 'var(--hotbox-surface)' }}
-            >
-              <span className="text-[var(--hotbox-text-dim)] text-sm">#</span>
-              <input
-                ref={inputRef}
-                id="new-channel-name"
-                type="text"
-                value={name}
-                onChange={(e) => { setName(e.target.value); setErr(''); }}
-                placeholder="new-channel"
-                className="flex-1 bg-transparent text-sm text-[var(--hotbox-text)] outline-none placeholder:text-[var(--hotbox-text-dim)]"
-                maxLength={64}
-                disabled={busy}
-              />
-            </div>
-            {err && <p className="text-xs text-[var(--hotbox-crashed)]">{err}</p>}
-          </div>
-          <div className="flex gap-2 justify-end">
+    <Link
+      href={href}
+      title={`${name} · ${role}`}
+      className={[
+        'flex items-center gap-2.5 px-4 py-[3px] rounded mx-1',
+        active
+          ? 'bg-[var(--hotbox-surface-2)] text-[var(--hotbox-text)]'
+          : 'text-[var(--hotbox-text-muted)] hover:bg-[var(--hotbox-surface-2)] hover:text-[var(--hotbox-text)]',
+      ].join(' ')}
+    >
+      <PresenceDot status={status} size={7} />
+      <span className="flex-1 text-sm truncate">{name}</span>
+      {(role === 'orchestrator' || role === 'headmaster') && (
+        <RoleBadge role={role as 'orchestrator' | 'headmaster'} />
+      )}
+    </Link>
+  );
+}
+
+function AgentsSection({ onOpenMembers }: { onOpenMembers(filter: 'agent'): void }) {
+  const agents = useAgents(15_000);
+  const presence = useHotboxStore((s) => s.presence);
+
+  const sorted = [...agents].sort((a, b) => {
+    const sa = (presence[a.id] ?? presence[a.name] ?? 'offline') as PresenceStatus;
+    const sb = (presence[b.id] ?? presence[b.name] ?? 'offline') as PresenceStatus;
+    const aOnline = sa !== 'offline';
+    const bOnline = sb !== 'offline';
+    if (aOnline !== bOnline) return aOnline ? -1 : 1;
+    const aTop = a.role === 'orchestrator' || a.role === 'headmaster';
+    const bTop = b.role === 'orchestrator' || b.role === 'headmaster';
+    if (aTop !== bTop) return aTop ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const visible = sorted.slice(0, MAX_AGENTS_VISIBLE);
+  const overflow = sorted.length - MAX_AGENTS_VISIBLE;
+
+  return (
+    <div className="mb-1">
+      <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--hotbox-text-dim)]">Agents</div>
+      {agents.length === 0 ? (
+        <div className="px-4 py-2 text-xs text-[var(--hotbox-text-dim)]">No agents connected yet.</div>
+      ) : (
+        <>
+          {visible.map((agent) => (
+            <AgentItem
+              key={agent.id}
+              id={agent.id}
+              name={agent.name}
+              role={agent.role}
+              status={(presence[agent.id] ?? presence[agent.name] ?? 'offline') as PresenceStatus}
+            />
+          ))}
+          {overflow > 0 && (
             <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-1.5 rounded text-sm text-[var(--hotbox-text-muted)] hover:text-[var(--hotbox-text)]"
-              disabled={busy}
+              onClick={() => onOpenMembers('agent')}
+              className="w-full text-left px-4 py-1 text-xs transition-opacity"
+              style={{ color: 'var(--hotbox-accent)' }}
             >
-              Cancel
+              +{overflow} more
             </button>
-            <button
-              type="submit"
-              disabled={busy || !name.trim()}
-              className="px-4 py-1.5 rounded text-sm font-medium bg-[var(--hotbox-accent)] text-white hover:bg-[var(--hotbox-accent-hover)] disabled:opacity-50"
-            >
-              {busy ? 'Creating…' : 'Create'}
-            </button>
-          </div>
-        </form>
-      </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
 
+// ── Sidebar ──────────────────────────────────────────────────────────────────
+
 export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
-  const channels    = useHotboxStore((s) => s.channels);
-  const setChannels = useHotboxStore((s) => s.setChannels);
+  const channels     = useHotboxStore((s) => s.channels);
+  const setChannels  = useHotboxStore((s) => s.setChannels);
   const appendChannel = useHotboxStore((s) => s.appendChannel);
-  const setPresence = useHotboxStore((s) => s.setPresence);
+  const setPresence  = useHotboxStore((s) => s.setPresence);
   const { subscribe } = useWs();
 
-  const [showCreate, setShowCreate] = React.useState(false);
+  const [showCreate, setShowCreate]   = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
+  const [membersFilter, setMembersFilter] = useState<'all' | 'user' | 'agent'>('all');
 
   useEffect(() => {
     fetch(`/api/hotbox/channels?org=${ORG}`)
@@ -225,7 +198,11 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
     setShowCreate(false);
   };
 
-  const agents = channels.filter((c) => c.type === 'agent');
+  const handleOpenMembers = (filter: 'agent') => {
+    setMembersFilter(filter);
+    setShowMembers(true);
+  };
+
   const system = channels.filter((c) => c.type === 'system');
   const topics = channels.filter((c) => c.type === 'topic');
   const dms    = channels.filter((c) => c.type === 'dm');
@@ -233,11 +210,17 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
   return (
     <>
       {showCreate && (
-        <CreateChannelModal
-          onClose={() => setShowCreate(false)}
+        <ChannelCreateModal
           onCreated={handleChannelCreated}
+          onClose={() => setShowCreate(false)}
         />
       )}
+
+      <MembersPanel
+        open={showMembers}
+        onClose={() => setShowMembers(false)}
+        initialFilter={membersFilter}
+      />
 
       <nav
         className="flex flex-col h-full overflow-y-auto hotbox-scrollbar pt-2 pb-4"
@@ -245,10 +228,23 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
       >
         {/* Workspace header */}
         <div className="px-4 py-2 mb-2 flex items-center justify-between border-b border-[var(--hotbox-border)]">
-          <span data-testid="workspace-label" className="font-semibold text-sm text-[var(--hotbox-text)] truncate">{WORKSPACE_NAME}</span>
+          <span data-testid="workspace-label" className="font-semibold text-sm text-[var(--hotbox-text)] truncate">
+            {WORKSPACE_NAME}
+          </span>
+          <button
+            onClick={() => setShowMembers(true)}
+            className="text-[var(--hotbox-text-dim)] hover:text-[var(--hotbox-text)] transition-colors"
+            title="Members"
+          >
+            <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </button>
         </div>
 
-        <ChannelGroup label="Agents"          channels={agents}                 onItemClick={onItemClick} />
+        <AgentsSection onOpenMembers={handleOpenMembers} />
         <ChannelGroup label="Channels"        channels={[...system, ...topics]} onItemClick={onItemClick} />
         <ChannelGroup label="Direct Messages" channels={dms}                    onItemClick={onItemClick} />
 

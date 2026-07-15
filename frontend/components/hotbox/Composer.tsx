@@ -7,7 +7,7 @@ import { useAuth } from './AuthProvider';
 import { useHotboxStore } from '@/store/hotbox';
 import type { HotboxMessage, ServerMessage } from '@/lib/hotbox/types';
 
-const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG || 'toadsage';
+const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG ?? 'toadsage';
 
 interface Props {
   channelId: string;
@@ -26,16 +26,17 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const { send, status, subscribe } = useWs();
-  const { encrypt, ready: keystoreReady, keyLossAckRequired, pubkeyReady } = useKeystore();
+  const { encrypt, ready: keystoreReady, keyLossAckRequired } = useKeystore();
   const { memberId } = useAuth();
   const appendMessage = useHotboxStore((s) => s.appendMessage);
   const reconcilePending = useHotboxStore((s) => s.reconcilePending);
+  const removeMessage = useHotboxStore((s) => s.removeMessage);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
   const pendingRef = useRef<Map<string, HotboxMessage>>(new Map());
 
-  const isDisabled = disabled || !keystoreReady || keyLossAckRequired || sending || !pubkeyReady;
+  const isDisabled = disabled || !keystoreReady || keyLossAckRequired || sending;
 
   // Reconcile optimistic messages on msg.ack
   useEffect(() => {
@@ -102,17 +103,17 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
       appendMessage(channelId, optimistic);
       pendingRef.current.set(nonce, optimistic);
 
-      if (status === 'open') {
-        // Primary: WS path — server persists + broadcasts, returns msg.ack
-        send({
-          type: 'msg.send',
-          channel_id: channelId,
-          crypto_envelope: envelope,
-          nonce,
-          ...(threadParentId ? { thread_id: threadParentId } : {}),
-        });
-      } else {
-        // Fallback: HTTP POST — same AegisEnvelope shape
+      // Check live readyState, not stale React status — WS may drop between renders
+      const wsSent = send({
+        type: 'msg.send',
+        channel_id: channelId,
+        crypto_envelope: envelope,
+        nonce,
+        ...(threadParentId ? { thread_id: threadParentId } : {}),
+      });
+
+      if (!wsSent) {
+        // WS not OPEN (disconnected or closing) — fall through to HTTP
         const res = await fetch(`/api/hotbox/channels/${channelId}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -122,13 +123,13 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
             ...(threadParentId ? { thread_parent_id: threadParentId } : {}),
           }),
         });
+        pendingRef.current.delete(nonce);
         if (res.ok) {
           const confirmed = await res.json() as HotboxMessage;
-          pendingRef.current.delete(nonce);
           reconcilePending(channelId, nonce, confirmed);
         } else {
-          // HTTP failed — mark pending as failed (leave in store with _pending for now)
-          pendingRef.current.delete(nonce);
+          // HTTP also failed — retract optimistic message rather than leaving it stuck
+          removeMessage(channelId, nonce);
         }
       }
 
@@ -141,7 +142,7 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
       }
     } catch { /* non-fatal */ }
     finally { setSending(false); }
-  }, [text, isDisabled, status, encrypt, send, channelId, threadParentId, memberId, appendMessage, reconcilePending, emitTyping]);
+  }, [text, isDisabled, encrypt, send, channelId, threadParentId, memberId, appendMessage, reconcilePending, removeMessage, emitTyping]);
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -153,7 +154,6 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
   const placeholder =
     keyLossAckRequired  ? 'Acknowledge the key-loss warning above to start messaging' :
     !keystoreReady      ? 'Keystore initialising…' :
-    !pubkeyReady        ? 'Setting up secure channel…' :
     status !== 'open'   ? `#${channelId} (sending via HTTP…)` :
     `Message #${channelId}`;
 
@@ -169,7 +169,7 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
         <textarea
           ref={textareaRef}
           rows={1}
-          data-testid="composer-input" className="flex-1 resize-none bg-transparent outline-none text-sm text-[var(--hotbox-text)] placeholder:text-[var(--hotbox-text-dim)] max-h-40 overflow-y-auto hotbox-scrollbar"
+          className="flex-1 resize-none bg-transparent outline-none text-sm text-[var(--hotbox-text)] placeholder:text-[var(--hotbox-text-dim)] max-h-40 overflow-y-auto hotbox-scrollbar"
           placeholder={placeholder}
           value={text}
           disabled={isDisabled}
@@ -188,7 +188,6 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
           onKeyDown={handleKeyDown}
         />
         <button
-          data-testid="composer-send"
           className={[
             'flex-shrink-0 rounded px-2.5 py-1 text-sm font-medium',
             text.trim() && !isDisabled

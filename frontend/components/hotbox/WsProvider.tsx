@@ -14,7 +14,8 @@ type Handler = (msg: ServerMessage) => void;
 
 interface WsContext {
   status: WsStatus;
-  send(msg: ClientMessage): void;
+  /** Returns true if the message was delivered to the socket, false if the socket was not OPEN. */
+  send(msg: ClientMessage): boolean;
   subscribe(type: ServerMessageType, handler: Handler): () => void;
 }
 
@@ -130,10 +131,12 @@ export function WsProvider({ children }: { children: React.ReactNode }) {
     };
   }, [connect]);
 
-  const send = useCallback((msg: ClientMessage) => {
+  const send = useCallback((msg: ClientMessage): boolean => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(msg));
+      return true;
     }
+    return false;
   }, []);
 
   const subscribe = useCallback((type: ServerMessageType, handler: Handler): (() => void) => {
