@@ -93,7 +93,7 @@ export interface KeystoreContextValue {
   encrypt(chatId: string, plaintext: string): Promise<AegisEnvelope>;
   decrypt(envelope: AegisEnvelope): Promise<string>;
   cacheChatKey(chatId: string, bundle: WrappedKeyBundle): Promise<void>;
-  createChatKey(chatId: string, memberIds: string[]): Promise<void>;
+  createChatKey(chatId: string, memberIds: string[]): Promise<CryptoKey>;
   loadOrchestratorKey(): Promise<void>;
 }
 
@@ -249,7 +249,7 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
 
   // ---------- Exposed: createChatKey — generate CK + distribute wrapped bundles ----------
 
-  const createChatKey = useCallback(async (chatId: string, memberIds: string[]): Promise<void> => {
+  const createChatKey = useCallback(async (chatId: string, memberIds: string[]): Promise<CryptoKey> => {
     const db = dbRef.current!;
 
     const ck = await crypto.subtle.generateKey(
@@ -311,6 +311,7 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
     // ck is extractable; export raw bytes for IDB (Safari compat).
     const ckBytes = await crypto.subtle.exportKey('raw', ck);
     await (db as IDBPDatabase<HotboxDBSchema>).put('chat-keys', { id: chatId, ckBytes, cached_at: new Date().toISOString() });
+    return ck;
   }, []);
 
   // ---------- Internal: get or derive CK for a chat ----------
@@ -339,15 +340,12 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
           if (membersRes.ok) {
             const { members } = await membersRes.json() as { members: string[] };
             if (members.length > 0) {
-              await createChatKey(chatId, members);
-              // createChatKey already stored raw CK bytes in IDB — use that directly rather
-              // than re-fetching the server bundle (avoids a second unwrapKey call that would
-              // fail if the private key or bundle shape has any mismatch).
-              const recovered = await (db as IDBPDatabase<HotboxDBSchema>).get('chat-keys', chatId);
-              if (recovered) {
-                console.info(`[keystore] getCK: createChatKey recovery succeeded for ${chatId}`);
-                return crypto.subtle.importKey('raw', recovered.ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
-              }
+              const freshCk = await createChatKey(chatId, members);
+              // createChatKey returns the live CryptoKey it generated — use directly.
+              // Avoids an IDB round-trip that fails on fresh-storage contexts (IDB.put may
+              // not have run if the member-wrap Promise.all rejected before reaching it).
+              console.info(`[keystore] getCK: createChatKey recovery succeeded for ${chatId}`);
+              return freshCk;
             }
           }
         } catch (err) {
