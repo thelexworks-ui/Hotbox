@@ -23,7 +23,7 @@ function formatTime(ts: string): string {
 }
 
 function MessageRow({ msg }: { msg: AnyMessage }) {
-  const { decrypt } = useKeystore();
+  const { decrypt, evictCK } = useKeystore();
   const [text, setText] = React.useState<string | null>(null);
 
   useEffect(() => {
@@ -32,8 +32,18 @@ function MessageRow({ msg }: { msg: AnyMessage }) {
     if (msg._text) { setText(msg._text); return; }
     decrypt(msg.crypto_envelope)
       .then((t) => setText(t))
-      .catch(() => setText('[decryption failed]'));
-  }, [msg, decrypt]);
+      .catch(async () => {
+        // IDB CK may be stale (prior session, key rotation, or concurrent auto-gen race).
+        // Evict and re-fetch from server — one retry only to avoid infinite loops.
+        try {
+          await evictCK(msg.crypto_envelope.kid);
+          const t = await decrypt(msg.crypto_envelope);
+          setText(t);
+        } catch {
+          setText('[decryption failed]');
+        }
+      });
+  }, [msg, decrypt, evictCK]);
 
   if (msg.type === 'system') {
     return (
