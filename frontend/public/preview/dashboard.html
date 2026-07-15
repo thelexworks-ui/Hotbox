@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hotbox Dashboard — Neural Graph Preview</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-base:      #0E0C0A;
+    --bg-sunken:    #090808;
+    --bg-surface:   #131009;
+    --bg-raised:    #18140F;
+    --bg-overlay:   #1E1812;
+    --surface-hover: #201A14;
+    --surface-selected: #1D1A0E;
+    --border:        #2A2318;
+    --border-strong: #3A3025;
+    --text-primary:  #F7F2E8;
+    --text-secondary:#BFB49A;
+    --text-tertiary: #7A6E5A;
+    --text-disabled: #4A4438;
+    --accent:        #E07020;
+    --accent-hover:  #F07828;
+    --accent-subtle: #2A1A08;
+    --accent-glow:   rgba(224,112,32,0.22);
+    --accent-fg:     #0E0C0A;
+    --yellow:        #FFE040;
+    --yellow-subtle: #1E1A08;
+    --online:        #48C882;
+    --idle:          #C8A040;
+    --offline:       #4A4848;
+    --warning:       #C89840;
+    --warning-subtle:#201808;
+    --danger:        #C04030;
+    --danger-subtle: #200808;
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.70), 0 2px 8px rgba(0,0,0,0.50);
+    --ease-out: cubic-bezier(0.0, 0.0, 0.2, 1.0);
+    --ease-in:  cubic-bezier(0.4, 0.0, 1.0, 1.0);
+  }
+
+  html, body { height: 100%; background: var(--bg-base); color: var(--text-primary); font-family: -apple-system, 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.5; overflow-x: hidden; }
+
+  /* ── TOP NAV ── */
+  .top-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 52px; padding: 0 20px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-strong);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .nav-wordmark { font-size: 13px; font-weight: 700; letter-spacing: 0.12em; color: var(--text-primary); }
+  .nav-org {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 12px; border-radius: 8px;
+    background: var(--bg-raised); border: 1px solid var(--border);
+    cursor: pointer; transition: border-color 150ms var(--ease-out);
+  }
+  .nav-org:hover { border-color: var(--border-strong); }
+  .org-logo {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: linear-gradient(135deg, var(--accent) 0%, #C05800 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 800; color: var(--accent-fg);
+    box-shadow: 0 2px 6px rgba(224,112,32,0.35);
+  }
+  .nav-org-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .nav-chevron { color: var(--text-tertiary); font-size: 10px; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-icon { color: var(--text-tertiary); cursor: pointer; font-size: 16px; transition: color 150ms; }
+  .nav-icon:hover { color: var(--text-primary); }
+  .nav-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-subtle), var(--bg-raised));
+    border: 1.5px solid var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: var(--accent); cursor: pointer;
+  }
+  .notif-badge {
+    position: relative;
+  }
+  .notif-dot {
+    position: absolute; top: -2px; right: -2px;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); border: 1.5px solid var(--bg-surface);
+  }
+
+  /* ── MAIN LAYOUT ── */
+  .main { padding: 20px; max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+
+  /* ── SECTION CARD ── */
+  .section-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.40), 0 1px 4px rgba(0,0,0,0.25);
+  }
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 18px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.10em;
+    text-transform: uppercase; color: var(--text-tertiary);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .section-label-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 6px var(--accent-glow);
+  }
+  .section-meta { font-size: 11px; color: var(--text-tertiary); }
+  .filter-btn {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--bg-raised);
+    font-size: 11px; color: var(--text-secondary); cursor: pointer;
+    transition: all 150ms var(--ease-out);
+  }
+  .filter-btn:hover { border-color: var(--border-strong); color: var(--text-primary); }
+
+  /* ── NEURAL GRAPH ── */
+  #graph-container {
+    position: relative;
+    height: 360px;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 50% 40%, rgba(224,112,32,0.04) 0%, transparent 65%);
+  }
+  #graph-svg { width: 100%; height: 100%; }
+
+  /* SVG elements */
+  .edge { fill: none; }
+  .edge-member { stroke: var(--border-strong); stroke-width: 1; opacity: 0.55; }
+  .edge-dm { stroke: var(--accent); stroke-width: 1.5; opacity: 0.65; stroke-dasharray: 4 3; }
+  .edge-active {
+    stroke: var(--accent); stroke-width: 2.5; opacity: 1;
+    stroke-dasharray: 8 5;
+    animation: flow 1.4s linear infinite;
+    filter: url(#glow-orange);
+  }
+  .edge-permission { stroke: var(--warning); stroke-width: 1; opacity: 0.55; stroke-dasharray: 2 4; }
+
+  @keyframes flow {
+    from { stroke-dashoffset: 0; }
+    to   { stroke-dashoffset: -52; }
+  }
+  @keyframes flow-slow {
+    from { stroke-dashoffset: 0; }
+    to   { stroke-dashoffset: -42; }
+  }
+
+  .node-group { cursor: pointer; }
+  .node-group:hover .node-circle { opacity: 0.92; }
+  .node-label {
+    font-size: 10px; font-weight: 600; fill: var(--text-secondary);
+    text-anchor: middle; pointer-events: none;
+    font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
+  }
+  .node-sublabel {
+    font-size: 9px; fill: var(--text-tertiary);
+    text-anchor: middle; pointer-events: none;
+    font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
+  }
+  .presence-ring { fill: none; opacity: 0.7; }
+
+  /* ── HEARTBEAT PULSE KEYFRAMES ── */
+  /* SVG circle r attr can't be animated via CSS r property in all browsers — use transform scale instead */
+  @keyframes hb-fresh {
+    0%   { transform: scale(1);    opacity: 0.75; }
+    60%  { transform: scale(2.0);  opacity: 0; }
+    100% { transform: scale(2.0);  opacity: 0; }
+  }
+  @keyframes hb-warming {
+    0%   { transform: scale(1);    opacity: 0.55; }
+    60%  { transform: scale(1.85); opacity: 0; }
+    100% { transform: scale(1.85); opacity: 0; }
+  }
+  @keyframes hb-stale {
+    0%   { transform: scale(1);    opacity: 0.40; }
+    65%  { transform: scale(1.65); opacity: 0; }
+    100% { transform: scale(1.65); opacity: 0; }
+  }
+
+  .hb-ring-fresh   { animation: hb-fresh   1.5s ease-out infinite; transform-origin: center; transform-box: fill-box; }
+  .hb-ring-warming { animation: hb-warming  3.0s ease-out infinite; transform-origin: center; transform-box: fill-box; }
+  .hb-ring-stale   { animation: hb-stale   5.0s ease-out infinite; transform-origin: center; transform-box: fill-box; }
+
+  /* prefers-reduced-motion: kill all node pulse animations, keep static glow */
+  @media (prefers-reduced-motion: reduce) {
+    .hb-ring-fresh, .hb-ring-warming, .hb-ring-stale { animation: none; opacity: 0.30; }
+    .pulse-anim { animation: none; opacity: 0; }
+  }
+
+  /* Mobile list presence dot pulse */
+  @keyframes dot-pulse {
+    0%   { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+    70%  { box-shadow: 0 0 0 5px transparent; opacity: 0.8; }
+    100% { box-shadow: 0 0 0 0 transparent; opacity: 1; }
+  }
+  .dot-fresh   { animation: dot-pulse 1.5s ease-out infinite; }
+  .dot-warming { animation: dot-pulse 3.0s ease-out infinite; }
+  .dot-stale   { animation: dot-pulse 5.0s ease-out infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    .dot-fresh, .dot-warming, .dot-stale { animation: none; }
+  }
+
+  /* Pulse animation for user online nodes */
+  @keyframes pulse-ring {
+    0%   { r: 0; opacity: 0.8; }
+    100% { r: 18; opacity: 0; }
+  }
+  .pulse-anim { animation: pulse-ring 2.2s ease-out infinite; }
+
+  /* ── FLEET HEALTH ── */
+  .fleet-stripe {
+    display: flex; gap: 10px; padding: 14px 18px;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .fleet-stripe::-webkit-scrollbar { display: none; }
+
+  .agent-card {
+    flex-shrink: 0; width: 118px;
+    padding: 10px 12px; border-radius: 12px;
+    border: 1px solid; transition: all 150ms var(--ease-out);
+    cursor: pointer; position: relative;
+  }
+  .agent-card:hover { transform: translateY(-1px); }
+
+  .agent-card.online {
+    border-color: rgba(72,200,130,0.28);
+    background: var(--bg-surface);
+    box-shadow: 0 0 0 1px rgba(72,200,130,0.14), inset 0 0 0 1px rgba(72,200,130,0.06);
+  }
+  .agent-card.idle {
+    border-color: var(--border);
+    background: var(--bg-surface);
+  }
+  .agent-card.stale {
+    border-color: rgba(200,152,64,0.35);
+    background: rgba(200,152,64,0.05);
+  }
+  .agent-card.missed {
+    border-color: rgba(192,64,48,0.40);
+    background: rgba(192,64,48,0.07);
+  }
+
+  .card-name-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .card-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .card-dot.online { background: var(--online); box-shadow: 0 0 5px rgba(72,200,130,0.7); }
+  .card-dot.idle   { background: var(--idle); }
+  .card-dot.stale  { background: var(--warning); }
+  .card-dot.missed { background: var(--danger); }
+
+  .card-name { font-size: 11px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .card-role { font-size: 9px; color: var(--text-tertiary); margin-bottom: 6px; }
+  .card-status-row { display: flex; align-items: center; gap: 4px; }
+  .card-status-icon { font-size: 10px; }
+  .card-status-text { font-size: 10px; }
+  .card-status-text.online  { color: var(--text-tertiary); }
+  .card-status-text.idle    { color: var(--idle); }
+  .card-status-text.stale   { color: var(--warning); }
+  .card-status-text.missed  { color: var(--danger); }
+
+  /* ── CONTEXT PANE ── */
+  .pane-overlay {
+    display: none; position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0); transition: background 200ms var(--ease-out);
+  }
+  .pane-overlay.open { display: block; background: rgba(0,0,0,0.45); }
+
+  .context-pane {
+    position: fixed; top: 0; right: 0; bottom: 0; width: 300px; z-index: 201;
+    background: var(--bg-raised);
+    border-left: 1px solid var(--border-strong);
+    box-shadow: var(--shadow-lg);
+    transform: translateX(100%);
+    transition: transform 250ms var(--ease-out);
+    display: flex; flex-direction: column;
+  }
+  .context-pane.open { transform: translateX(0); }
+
+  .pane-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 16px 18px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .pane-avatar {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; flex-shrink: 0;
+  }
+  .pane-avatar.agent { background: var(--accent-subtle); color: var(--accent); border: 1px solid rgba(224,112,32,0.25); }
+  .pane-avatar.channel { background: rgba(72,200,130,0.10); color: var(--online); border: 1px solid rgba(72,200,130,0.20); }
+  .pane-avatar.user { background: var(--yellow-subtle); color: var(--yellow); border: 1px solid rgba(255,224,64,0.20); }
+  .pane-title { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+  .pane-subtitle { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
+  .pane-close {
+    margin-left: auto; width: 28px; height: 28px; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--bg-surface);
+    color: var(--text-tertiary); cursor: pointer; font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 150ms var(--ease-out); flex-shrink: 0;
+  }
+  .pane-close:hover { color: var(--text-primary); border-color: var(--border-strong); }
+
+  .pane-body { flex: 1; padding: 16px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+
+  .pane-section-title { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 8px; }
+
+  .pane-stat-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .pane-stat-label { font-size: 12px; color: var(--text-tertiary); }
+  .pane-stat-value { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+
+  .pane-presence { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; background: var(--bg-surface); border: 1px solid var(--border); }
+  .pane-presence-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .pane-presence-label { font-size: 12px; font-weight: 600; }
+  .pane-presence-since { font-size: 11px; color: var(--text-tertiary); margin-left: auto; }
+
+  .pane-task { padding: 8px 10px; border-radius: 8px; background: var(--bg-surface); border: 1px solid var(--border); margin-bottom: 6px; }
+  .pane-task-title { font-size: 12px; font-weight: 500; color: var(--text-primary); }
+  .pane-task-meta { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; }
+
+  .pane-actions { display: flex; gap: 8px; margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border); }
+  .btn-secondary {
+    flex: 1; padding: 8px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg-surface);
+    font-size: 12px; font-weight: 600; color: var(--text-secondary);
+    cursor: pointer; transition: all 150ms var(--ease-out); text-align: center;
+  }
+  .btn-secondary:hover { color: var(--text-primary); border-color: var(--border-strong); background: var(--surface-hover); }
+  .btn-primary {
+    flex: 1; padding: 8px; border-radius: 8px;
+    background: var(--accent); border: 1px solid transparent;
+    font-size: 12px; font-weight: 700; color: var(--accent-fg);
+    cursor: pointer; transition: all 150ms var(--ease-out); text-align: center;
+  }
+  .btn-primary:hover { background: var(--accent-hover); box-shadow: 0 0 0 3px var(--accent-glow); }
+
+  /* ── LEGEND ── */
+  .legend {
+    display: flex; gap: 18px; padding: 10px 18px;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-tertiary); }
+  .legend-line { height: 2px; width: 22px; border-radius: 1px; }
+  .legend-dash { height: 0; width: 22px; border-top: 2px dashed; border-radius: 1px; }
+
+  /* ── TOOLTIP ── */
+  .graph-tooltip {
+    position: absolute; pointer-events: none; z-index: 50;
+    background: var(--bg-overlay); border: 1px solid var(--border-strong);
+    border-radius: 8px; padding: 7px 11px;
+    font-size: 11px; color: var(--text-primary);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    opacity: 0; transition: opacity 100ms;
+    white-space: nowrap; max-width: 200px;
+  }
+  .graph-tooltip.visible { opacity: 1; }
+  .tooltip-name { font-weight: 700; margin-bottom: 2px; }
+  .tooltip-meta { color: var(--text-tertiary); font-size: 10px; line-height: 1.6; }
+
+  /* ── INSTRUCTION HINT ── */
+  .hint {
+    position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+    font-size: 10px; color: var(--text-tertiary);
+    background: var(--bg-overlay); border: 1px solid var(--border);
+    padding: 4px 12px; border-radius: 20px; white-space: nowrap;
+    pointer-events: none;
+  }
+
+  /* ── MOBILE ── */
+  @media (max-width: 640px) {
+    .main { padding: 12px; gap: 12px; }
+
+    /* Nav: hide center org-switcher, use compact layout */
+    .nav-wordmark { font-size: 12px; }
+    .nav-org { padding: 4px 10px; }
+    .nav-org-name { font-size: 12px; }
+
+    /* Graph: hide SVG, show node list */
+    #graph-svg { display: none; }
+    .hint { display: none; }
+    #mobile-node-list { display: flex !important; }
+    .mobile-view-graph-btn { display: flex !important; }
+
+    /* Fleet cards smaller */
+    .agent-card { width: 100px; padding: 8px 10px; }
+    .card-name { font-size: 10px; }
+    .card-role { font-size: 9px; }
+
+    /* Context pane full screen on mobile */
+    .context-pane { width: 100%; border-left: none; border-top: 1px solid var(--border-strong); }
+
+    /* Graph container shorter on mobile (list view) */
+    #graph-container { height: auto; min-height: 0; }
+
+    /* Legend hidden on mobile */
+    .legend { display: none; }
+  }
+
+  /* ── MOBILE NODE LIST ── */
+  #mobile-node-list {
+    display: none;
+    flex-direction: column;
+    padding: 8px 0 12px;
+  }
+  .mobile-section-header {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-tertiary);
+    padding: 8px 16px 4px;
+  }
+  .mobile-node-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 16px; cursor: pointer;
+    transition: background 150ms var(--ease-out);
+  }
+  .mobile-node-row:hover, .mobile-node-row:active { background: var(--surface-hover); }
+  .mobile-node-icon {
+    width: 32px; height: 32px; border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; flex-shrink: 0;
+  }
+  .mobile-node-icon.agent   { background: var(--accent-subtle); color: var(--accent); border: 1px solid rgba(224,112,32,0.20); }
+  .mobile-node-icon.channel { background: rgba(72,200,130,0.10); color: var(--online); border: 1px solid rgba(72,200,130,0.18); }
+  .mobile-node-icon.user    { background: var(--yellow-subtle); color: var(--yellow); border: 1px solid rgba(255,224,64,0.18); }
+  .mobile-node-icon.org     { background: linear-gradient(135deg, var(--accent) 0%, #C05800 100%); color: var(--accent-fg); border: none; box-shadow: 0 2px 6px rgba(224,112,32,0.30); }
+  .mobile-node-info { flex: 1; min-width: 0; }
+  .mobile-node-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .mobile-node-meta { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
+  .mobile-node-right { display: flex; align-items: center; gap: 6px; }
+  .mobile-presence-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── MOBILE VIEW GRAPH BUTTON ── */
+  .mobile-view-graph-btn {
+    display: none;
+    align-items: center; justify-content: center; gap: 6px;
+    margin: 4px 16px 12px;
+    padding: 9px; border-radius: 10px;
+    border: 1px dashed var(--border-strong);
+    background: transparent; color: var(--text-tertiary);
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: all 150ms var(--ease-out);
+  }
+  .mobile-view-graph-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── FULL-SCREEN GRAPH MODAL (mobile) ── */
+  .graph-modal {
+    display: none; position: fixed; inset: 0; z-index: 300;
+    background: var(--bg-base); flex-direction: column;
+  }
+  .graph-modal.open { display: flex; }
+  .graph-modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+    background: var(--bg-surface); flex-shrink: 0;
+  }
+  .graph-modal-title { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+  .graph-modal-close {
+    padding: 6px 12px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg-raised);
+    font-size: 12px; color: var(--text-secondary); cursor: pointer;
+  }
+  .graph-modal-svg-wrap { flex: 1; overflow: hidden; position: relative; }
+  .graph-modal-svg-wrap svg { width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<nav class="top-nav">
+  <span class="nav-wordmark">HOTBOX</span>
+  <div class="nav-org">
+    <div class="org-logo">O</div>
+    <span class="nav-org-name">Optimus</span>
+    <span class="nav-chevron">▾</span>
+  </div>
+  <div class="nav-right">
+    <div class="notif-badge nav-icon">
+      🔔<span class="notif-dot"></span>
+    </div>
+    <div class="nav-avatar">L</div>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- NEURAL GRAPH -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-label">
+        <div class="section-label-dot"></div>
+        Neural Graph
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span class="section-meta">8 nodes · 3 live connections</span>
+        <div class="filter-btn">All ▾</div>
+      </div>
+    </div>
+
+    <div id="graph-container">
+      <svg id="graph-svg" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- Orange glow filter for live edges -->
+          <filter id="glow-orange" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+            <feMerge>
+              <feMergeNode in="blur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+          <!-- Green glow for online nodes -->
+          <filter id="glow-green" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur"/>
+            <feMerge>
+              <feMergeNode in="blur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+          <!-- Soft shadow for nodes -->
+          <filter id="node-shadow" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="rgba(0,0,0,0.6)"/>
+          </filter>
+          <!-- Subtle glow for org node -->
+          <filter id="glow-accent-lg" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur"/>
+            <feMerge>
+              <feMergeNode in="blur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+          <!-- Clip for agent (rounded square) -->
+          <clipPath id="clip-agent-daedalus"><rect x="-14" y="-14" width="28" height="28" rx="7"/></clipPath>
+          <clipPath id="clip-agent-forge"><rect x="-14" y="-14" width="28" height="28" rx="7"/></clipPath>
+          <clipPath id="clip-agent-hades"><rect x="-14" y="-14" width="28" height="28" rx="7"/></clipPath>
+          <clipPath id="clip-agent-watchdog"><rect x="-14" y="-14" width="28" height="28" rx="7"/></clipPath>
+          <!-- Hexagon for channels -->
+          <polygon id="hex-shape" points="0,-18 15.6,-9 15.6,9 0,18 -15.6,9 -15.6,-9"/>
+        </defs>
+
+        <!-- Edges layer (drawn first, behind nodes) -->
+        <g id="edges-layer"></g>
+        <!-- Nodes layer -->
+        <g id="nodes-layer"></g>
+      </svg>
+
+      <div class="graph-tooltip" id="tooltip">
+        <div class="tooltip-name" id="tooltip-name"></div>
+        <div class="tooltip-meta" id="tooltip-meta"></div>
+      </div>
+
+      <div class="hint">Click any node to inspect · Scroll to zoom</div>
+
+      <!-- MOBILE: node list replaces SVG -->
+      <div id="mobile-node-list"></div>
+      <button class="mobile-view-graph-btn" onclick="openGraphModal()">
+        <span style="font-size:14px;">⬡</span> View Neural Graph
+      </button>
+    </div>
+
+  <!-- FULL-SCREEN GRAPH MODAL (mobile) -->
+  <div class="graph-modal" id="graph-modal">
+    <div class="graph-modal-header">
+      <span class="graph-modal-title">Neural Graph</span>
+      <button class="graph-modal-close" onclick="closeGraphModal()">Done</button>
+    </div>
+    <div class="graph-modal-svg-wrap" id="modal-svg-wrap"></div>
+  </div>
+
+    <!-- Legend -->
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-line" style="background:var(--border-strong);opacity:0.7;"></div>
+        member
+      </div>
+      <div class="legend-item">
+        <div class="legend-dash" style="border-color:var(--accent);opacity:0.7;"></div>
+        DM
+      </div>
+      <div class="legend-item">
+        <div class="legend-line" style="background:var(--accent);box-shadow:0 0 6px var(--accent-glow);"></div>
+        live activity
+      </div>
+      <div class="legend-item">
+        <div class="legend-dash" style="border-color:var(--warning);opacity:0.6;border-top-style:dotted;"></div>
+        permission
+      </div>
+      <div class="legend-item" style="margin-left:auto;font-size:9px;color:var(--text-disabled);">
+        Neural Graph v1 · force-layout
+      </div>
+    </div>
+  </div>
+
+  <!-- FLEET HEALTH -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-label">
+        <div class="section-label-dot"></div>
+        Fleet Health
+      </div>
+      <span class="section-meta">5 online · 1 idle · 1 stale · 1 missed</span>
+    </div>
+    <div class="fleet-stripe" id="fleet-stripe"></div>
+  </div>
+
+</div>
+
+<!-- CONTEXT PANE OVERLAY -->
+<div class="pane-overlay" id="pane-overlay" onclick="closePane()"></div>
+
+<!-- CONTEXT PANE -->
+<div class="context-pane" id="context-pane">
+  <div class="pane-header" id="pane-header"></div>
+  <div class="pane-body" id="pane-body"></div>
+</div>
+
+<script>
+// ── GRAPH DATA ──────────────────────────────────────────────────────────────
+
+// hbTier: 'fresh' (<2min) | 'warming' (2-10min) | 'stale' (10-20min) | 'cold' (>20min)
+const NODES = [
+  { id: 'org',       type: 'org',     label: 'Optimus',    sublabel: 'workspace',   r: 38, pinned: true },
+  { id: 'daedalus',  type: 'agent',   label: 'daedalus',   sublabel: 'design',      presence: 'online', role: 'agent',        hbTier: 'fresh' },
+  { id: 'forge',     type: 'agent',   label: 'forge',      sublabel: 'frontend',    presence: 'online', role: 'agent',        hbTier: 'fresh' },
+  { id: 'hades',     type: 'agent',   label: 'hades',      sublabel: 'review',      presence: 'idle',   role: 'orchestrator', hbTier: 'warming' },
+  { id: 'watchdog',  type: 'agent',   label: 'watchdog',   sublabel: 'monitoring',  presence: 'online', role: 'agent',        hbTier: 'fresh' },
+  { id: 'lex',       type: 'user',    label: 'Lex',        sublabel: 'founder',     presence: 'online' },
+  { id: 'general',   type: 'channel', label: '#general',   sublabel: '8 members' },
+  { id: 'design',    type: 'channel', label: '#design',    sublabel: '4 members' },
+  { id: 'ops',       type: 'channel', label: '#ops',       sublabel: '3 members' },
+]
+
+// Heartbeat pulse ring config per tier
+const HB_RING = {
+  fresh:   { stroke: '#E07020', r: 20, cssClass: 'hb-ring-fresh',   delay: 0 },
+  warming: { stroke: '#C8A040', r: 20, cssClass: 'hb-ring-warming',  delay: 0 },
+  stale:   { stroke: '#C89840', r: 18, cssClass: 'hb-ring-stale',   delay: 0 },
+  cold:    null,
+}
+
+const EDGES = [
+  // Member edges (thin, quiet)
+  { s: 'org', t: 'daedalus',  type: 'member' },
+  { s: 'org', t: 'forge',     type: 'member' },
+  { s: 'org', t: 'hades',     type: 'member' },
+  { s: 'org', t: 'watchdog',  type: 'member' },
+  { s: 'org', t: 'lex',       type: 'member' },
+  { s: 'general', t: 'lex',       type: 'member' },
+  { s: 'general', t: 'watchdog',  type: 'member' },
+  { s: 'ops',     t: 'hades',     type: 'member' },
+  { s: 'ops',     t: 'watchdog',  type: 'member' },
+  // DM
+  { s: 'lex',     t: 'daedalus',  type: 'dm' },
+  // Live / active (the "wow" edges)
+  { s: 'lex',     t: 'general',   type: 'active' },
+  { s: 'forge',   t: 'design',    type: 'active' },
+  { s: 'daedalus',t: 'design',    type: 'active' },
+  { s: 'hades',   t: 'forge',     type: 'permission' },
+]
+
+// Node appearance
+const NODE_COLORS = {
+  org:     { fill: '#1A1408', stroke: '#E07020', strokeW: 2.5, textFill: '#F7F2E8' },
+  agent:   { fill: '#1C1408', stroke: '#3A2A10', strokeW: 1.5, textFill: '#E07020' },
+  channel: { fill: '#0E1410', stroke: '#1E2E18', strokeW: 1.5, textFill: '#48C882' },
+  user:    { fill: '#141218', stroke: '#3A2A40', strokeW: 1.5, textFill: '#FFE040' },
+}
+const NODE_R = { org: 38, agent: 18, channel: 18, user: 16 }
+const PRESENCE_COLOR = { online: '#48C882', idle: '#C8A040', offline: '#4A4848' }
+
+// ── LAYOUT (simple force simulation) ────────────────────────────────────────
+
+let W, H
+const POS = {}
+const VEL = {}
+
+function initPositions() {
+  const svg = document.getElementById('graph-svg')
+  W = svg.clientWidth || 900
+  H = svg.clientHeight || 360
+
+  // Initial positions — spread around center
+  const angles = { daedalus: 250, forge: 310, hades: 170, watchdog: 60, lex: 20, general: 100, design: 210, ops: 135 }
+  const radii  = { daedalus: 160, forge: 145, hades: 155, watchdog: 130, lex: 120, general: 115, design: 135, ops: 150 }
+
+  NODES.forEach(n => {
+    if (n.id === 'org') {
+      POS[n.id] = { x: W * 0.48, y: H * 0.46 }
+    } else {
+      const a = (angles[n.id] || 0) * Math.PI / 180
+      const r = radii[n.id] || 130
+      POS[n.id] = { x: W * 0.48 + Math.cos(a) * r, y: H * 0.46 + Math.sin(a) * r }
+    }
+    VEL[n.id] = { x: 0, y: 0 }
+  })
+
+  // Run simulation offline
+  for (let i = 0; i < 200; i++) tick(0.015)
+}
+
+function tick(dt) {
+  const REPEL = 2800
+  const SPRING_K = 0.04
+  const SPRING_LEN = { member: 145, dm: 130, active: 125, permission: 150 }
+  const DAMPING = 0.88
+  const EDGE_LEN_ORG = 155
+
+  const force = {}
+  NODES.forEach(n => { force[n.id] = { x: 0, y: 0 } })
+
+  // Repulsion
+  for (let i = 0; i < NODES.length; i++) {
+    for (let j = i + 1; j < NODES.length; j++) {
+      const a = NODES[i], b = NODES[j]
+      const dx = POS[b.id].x - POS[a.id].x
+      const dy = POS[b.id].y - POS[a.id].y
+      const d = Math.max(Math.sqrt(dx*dx + dy*dy), 1)
+      const f = REPEL / (d * d)
+      const fx = (dx / d) * f, fy = (dy / d) * f
+      force[a.id].x -= fx; force[a.id].y -= fy
+      force[b.id].x += fx; force[b.id].y += fy
+    }
+  }
+
+  // Spring along edges
+  EDGES.forEach(e => {
+    const pa = POS[e.s], pb = POS[e.t]
+    const dx = pb.x - pa.x, dy = pb.y - pa.y
+    const d = Math.max(Math.sqrt(dx*dx + dy*dy), 1)
+    const rest = (e.s === 'org' || e.t === 'org') ? EDGE_LEN_ORG : (SPRING_LEN[e.type] || 140)
+    const f = (d - rest) * SPRING_K
+    const fx = (dx / d) * f, fy = (dy / d) * f
+    force[e.s].x += fx; force[e.s].y += fy
+    force[e.t].x -= fx; force[e.t].y -= fy
+  })
+
+  // Center gravity
+  NODES.forEach(n => {
+    if (!n.pinned) {
+      force[n.id].x += (W * 0.48 - POS[n.id].x) * 0.003
+      force[n.id].y += (H * 0.46 - POS[n.id].y) * 0.003
+    }
+  })
+
+  // Integrate
+  NODES.forEach(n => {
+    if (n.pinned) {
+      POS[n.id] = { x: W * 0.48, y: H * 0.46 }
+      return
+    }
+    VEL[n.id].x = (VEL[n.id].x + force[n.id].x * dt) * DAMPING
+    VEL[n.id].y = (VEL[n.id].y + force[n.id].y * dt) * DAMPING
+    POS[n.id].x += VEL[n.id].x
+    POS[n.id].y += VEL[n.id].y
+    // Boundary
+    const r = NODE_R[n.type] || 18
+    POS[n.id].x = Math.max(r + 20, Math.min(W - r - 20, POS[n.id].x))
+    POS[n.id].y = Math.max(r + 20, Math.min(H - r - 40, POS[n.id].y))
+  })
+}
+
+// ── RENDER ───────────────────────────────────────────────────────────────────
+
+function renderEdge(e) {
+  const p1 = POS[e.s], p2 = POS[e.t]
+  const mx = (p1.x + p2.x) / 2
+  const my = (p1.y + p2.y) / 2 - 22  // curve control point
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  path.setAttribute('d', `M ${p1.x} ${p1.y} Q ${mx} ${my} ${p2.x} ${p2.y}`)
+  path.setAttribute('fill', 'none')
+
+  if (e.type === 'member') {
+    path.setAttribute('stroke', '#3A3025')
+    path.setAttribute('stroke-width', '1')
+    path.setAttribute('opacity', '0.55')
+  } else if (e.type === 'dm') {
+    path.setAttribute('stroke', '#E07020')
+    path.setAttribute('stroke-width', '1.5')
+    path.setAttribute('stroke-dasharray', '4 3')
+    path.setAttribute('opacity', '0.65')
+  } else if (e.type === 'active') {
+    path.setAttribute('stroke', '#E07020')
+    path.setAttribute('stroke-width', '2.5')
+    path.setAttribute('stroke-dasharray', '8 5')
+    path.setAttribute('opacity', '1')
+    path.setAttribute('filter', 'url(#glow-orange)')
+    path.classList.add('edge-active')
+    // Randomize animation offset so not all edges pulse in sync
+    const delay = Math.random() * -1.4
+    path.style.animationDelay = delay + 's'
+  } else if (e.type === 'permission') {
+    path.setAttribute('stroke', '#C89840')
+    path.setAttribute('stroke-width', '1')
+    path.setAttribute('stroke-dasharray', '2 4')
+    path.setAttribute('opacity', '0.55')
+  }
+  return path
+}
+
+function hexPoints(cx, cy, r) {
+  const pts = []
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 180 * (60 * i - 30)
+    pts.push(`${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`)
+  }
+  return pts.join(' ')
+}
+
+function renderNode(n) {
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+  g.setAttribute('transform', `translate(${POS[n.id].x},${POS[n.id].y})`)
+  g.classList.add('node-group')
+  g.setAttribute('data-id', n.id)
+
+  const c = NODE_COLORS[n.type]
+  const r = NODE_R[n.type] || 18
+
+  if (n.type === 'org') {
+    // Outer glow ring
+    const glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+    glow.setAttribute('r', r + 8)
+    glow.setAttribute('fill', 'none')
+    glow.setAttribute('stroke', '#E07020')
+    glow.setAttribute('stroke-width', '1')
+    glow.setAttribute('opacity', '0.15')
+    g.appendChild(glow)
+
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+    circle.setAttribute('r', r)
+    circle.setAttribute('fill', c.fill)
+    circle.setAttribute('stroke', c.stroke)
+    circle.setAttribute('stroke-width', c.strokeW)
+    circle.setAttribute('filter', 'url(#glow-accent-lg)')
+    g.appendChild(circle)
+
+    // Inner logo circle
+    const inner = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+    inner.setAttribute('r', r - 10)
+    inner.setAttribute('fill', '#2A1A08')
+    g.appendChild(inner)
+
+    const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+    txt.setAttribute('y', '5')
+    txt.setAttribute('text-anchor', 'middle')
+    txt.setAttribute('fill', '#E07020')
+    txt.setAttribute('font-size', '15')
+    txt.setAttribute('font-weight', '800')
+    txt.setAttribute('font-family', '-apple-system, Segoe UI, system-ui, sans-serif')
+    txt.textContent = 'O'
+    g.appendChild(txt)
+
+  } else if (n.type === 'agent') {
+    // Heartbeat pulse ring (behind the node shape)
+    const hbCfg = n.hbTier ? HB_RING[n.hbTier] : null
+    if (hbCfg) {
+      // Two rings for depth — second ring offset by half the animation period
+      [0, 0.5].forEach((delayFrac, i) => {
+        const ring = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+        ring.setAttribute('x', -hbCfg.r)
+        ring.setAttribute('y', -hbCfg.r)
+        ring.setAttribute('width', hbCfg.r * 2)
+        ring.setAttribute('height', hbCfg.r * 2)
+        ring.setAttribute('rx', Math.round(hbCfg.r * 0.40))
+        ring.setAttribute('fill', 'none')
+        ring.setAttribute('stroke', hbCfg.stroke)
+        ring.setAttribute('stroke-width', i === 0 ? '1.5' : '1')
+        ring.classList.add(hbCfg.cssClass)
+        const dur = hbCfg.cssClass === 'hb-ring-fresh' ? 1.5 : hbCfg.cssClass === 'hb-ring-warming' ? 3.0 : 5.0
+        ring.style.animationDelay = `${-(delayFrac * dur).toFixed(2)}s`
+        g.appendChild(ring)
+      })
+    }
+
+    // Rounded square
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+    rect.setAttribute('x', -r)
+    rect.setAttribute('y', -r)
+    rect.setAttribute('width', r * 2)
+    rect.setAttribute('height', r * 2)
+    rect.setAttribute('rx', '7')
+    rect.setAttribute('fill', '#1C1408')
+    rect.setAttribute('stroke', n.role === 'orchestrator' ? '#E07020' : '#3A2A10')
+    rect.setAttribute('stroke-width', n.role === 'orchestrator' ? '2' : '1.5')
+    rect.setAttribute('filter', 'url(#node-shadow)')
+    g.appendChild(rect)
+
+    // Role indicator dot for orchestrator
+    if (n.role === 'orchestrator') {
+      const badge = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+      badge.setAttribute('x', r - 8)
+      badge.setAttribute('y', -r - 3)
+      badge.setAttribute('width', 24)
+      badge.setAttribute('height', 12)
+      badge.setAttribute('rx', '4')
+      badge.setAttribute('fill', '#2A1A08')
+      badge.setAttribute('stroke', '#E07020')
+      badge.setAttribute('stroke-width', '1')
+      g.appendChild(badge)
+      const badgeTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+      badgeTxt.setAttribute('x', r + 4)
+      badgeTxt.setAttribute('y', -r + 6)
+      badgeTxt.setAttribute('text-anchor', 'middle')
+      badgeTxt.setAttribute('fill', '#E07020')
+      badgeTxt.setAttribute('font-size', '7')
+      badgeTxt.setAttribute('font-weight', '700')
+      badgeTxt.setAttribute('letter-spacing', '0.04em')
+      badgeTxt.setAttribute('font-family', '-apple-system, Segoe UI, system-ui, sans-serif')
+      badgeTxt.textContent = 'ORCH'
+      g.appendChild(badgeTxt)
+    }
+
+    // Bot icon (simplified as ⬡ → just use text)
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+    icon.setAttribute('y', '5')
+    icon.setAttribute('text-anchor', 'middle')
+    icon.setAttribute('fill', c.textFill)
+    icon.setAttribute('font-size', '13')
+    icon.setAttribute('font-family', '-apple-system, Segoe UI, system-ui, sans-serif')
+    icon.textContent = '⬡'
+    g.appendChild(icon)
+
+  } else if (n.type === 'channel') {
+    const hex = document.createElementNS('http://www.w3.org/2000/svg', 'polygon')
+    hex.setAttribute('points', hexPoints(0, 0, r))
+    hex.setAttribute('fill', '#0E1410')
+    hex.setAttribute('stroke', '#1E3020')
+    hex.setAttribute('stroke-width', '1.5')
+    hex.setAttribute('filter', 'url(#node-shadow)')
+    g.appendChild(hex)
+
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+    icon.setAttribute('y', '5')
+    icon.setAttribute('text-anchor', 'middle')
+    icon.setAttribute('fill', '#48C882')
+    icon.setAttribute('font-size', '12')
+    icon.setAttribute('font-weight', '700')
+    icon.setAttribute('font-family', '-apple-system, Segoe UI, system-ui, sans-serif')
+    icon.textContent = '#'
+    g.appendChild(icon)
+
+  } else if (n.type === 'user') {
+    // Online pulse ring (only for online)
+    if (n.presence === 'online') {
+      const pulse = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+      pulse.setAttribute('r', '0')
+      pulse.setAttribute('fill', 'none')
+      pulse.setAttribute('stroke', '#48C882')
+      pulse.setAttribute('stroke-width', '1.5')
+      pulse.setAttribute('opacity', '0')
+      pulse.classList.add('pulse-anim')
+      g.appendChild(pulse)
+    }
+
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+    circle.setAttribute('r', r)
+    circle.setAttribute('fill', '#141218')
+    circle.setAttribute('stroke', '#3A2A40')
+    circle.setAttribute('stroke-width', '1.5')
+    circle.setAttribute('filter', 'url(#node-shadow)')
+    g.appendChild(circle)
+
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+    icon.setAttribute('y', '5')
+    icon.setAttribute('text-anchor', 'middle')
+    icon.setAttribute('fill', '#FFE040')
+    icon.setAttribute('font-size', '11')
+    icon.setAttribute('font-weight', '700')
+    icon.setAttribute('font-family', '-apple-system, Segoe UI, system-ui, sans-serif')
+    icon.textContent = n.label.charAt(0)
+    g.appendChild(icon)
+  }
+
+  // Presence dot (bottom-right, for agents and users)
+  if (n.presence) {
+    const dotBg = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+    dotBg.setAttribute('cx', r - 3)
+    dotBg.setAttribute('cy', r - 3)
+    dotBg.setAttribute('r', '5.5')
+    dotBg.setAttribute('fill', '#131009')
+    g.appendChild(dotBg)
+
+    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+    dot.setAttribute('cx', r - 3)
+    dot.setAttribute('cy', r - 3)
+    dot.setAttribute('r', '4')
+    dot.setAttribute('fill', PRESENCE_COLOR[n.presence] || '#4A4848')
+    if (n.presence === 'online') {
+      dot.setAttribute('filter', 'url(#glow-green)')
+    }
+    g.appendChild(dot)
+  }
+
+  // Label
+  const labelY = r + 14
+  const label = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+  label.setAttribute('y', labelY)
+  label.setAttribute('text-anchor', 'middle')
+  label.setAttribute('fill', n.type === 'org' ? '#F7F2E8' : '#BFB49A')
+  label.setAttribute('font-size', n.type === 'org' ? '11' : '10')
+  label.setAttribute('font-weight', n.type === 'org' ? '700' : '600')
+  label.setAttribute('font-family', '-apple-system, Segoe UI, system-ui, sans-serif')
+  label.textContent = n.label
+  g.appendChild(label)
+
+  if (n.sublabel) {
+    const sublabel = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+    sublabel.setAttribute('y', labelY + 12)
+    sublabel.setAttribute('text-anchor', 'middle')
+    sublabel.setAttribute('fill', '#7A6E5A')
+    sublabel.setAttribute('font-size', '9')
+    sublabel.setAttribute('font-family', '-apple-system, Segoe UI, system-ui, sans-serif')
+    sublabel.textContent = n.sublabel
+    g.appendChild(sublabel)
+  }
+
+  // Interaction
+  g.addEventListener('mouseenter', e => showTooltip(n, e))
+  g.addEventListener('mousemove',  e => moveTooltip(e))
+  g.addEventListener('mouseleave', hideTooltip)
+  g.addEventListener('click', () => openPane(n))
+
+  return g
+}
+
+function drawGraph() {
+  const edgesLayer = document.getElementById('edges-layer')
+  const nodesLayer = document.getElementById('nodes-layer')
+  edgesLayer.innerHTML = ''
+  nodesLayer.innerHTML = ''
+
+  EDGES.forEach(e => edgesLayer.appendChild(renderEdge(e)))
+  NODES.forEach(n => nodesLayer.appendChild(renderNode(n)))
+}
+
+// ── TOOLTIP ──────────────────────────────────────────────────────────────────
+
+const tooltip = document.getElementById('tooltip')
+const tooltipName = document.getElementById('tooltip-name')
+const tooltipMeta = document.getElementById('tooltip-meta')
+let tooltipVisible = false
+
+function showTooltip(n, e) {
+  const lines = []
+  if (n.type === 'agent')   lines.push(`role: ${n.role || 'agent'}`, `status: ${n.presence}`)
+  if (n.type === 'user')    lines.push(`role: member`, `status: ${n.presence}`)
+  if (n.type === 'channel') lines.push(n.sublabel || '')
+  if (n.type === 'org')     lines.push('workspace anchor')
+  tooltipName.textContent = n.label
+  tooltipMeta.innerHTML = lines.join('<br>')
+  tooltip.classList.add('visible')
+  moveTooltip(e)
+}
+function moveTooltip(e) {
+  const rect = document.getElementById('graph-container').getBoundingClientRect()
+  let x = e.clientX - rect.left + 12
+  let y = e.clientY - rect.top - 10
+  if (x + 180 > rect.width) x = e.clientX - rect.left - 180
+  tooltip.style.left = x + 'px'
+  tooltip.style.top  = y + 'px'
+}
+function hideTooltip() { tooltip.classList.remove('visible') }
+
+// ── CONTEXT PANE ─────────────────────────────────────────────────────────────
+
+const PANE_DATA = {
+  daedalus:  { type: 'agent',   avatar: '⬡', title: 'daedalus', subtitle: 'design agent · online', presence: 'online',  hb: 'active · 1m ago', task: 'Phase 2A visual polish spec', taskMeta: 'in progress · task_1784088087073_842' },
+  forge:     { type: 'agent',   avatar: '⬡', title: 'forge',    subtitle: 'frontend agent · online', presence: 'online', hb: 'active · 0m ago', task: 'CH2 Phase 2A implementation',  taskMeta: 'in progress · task_1784087923_forge' },
+  hades:     { type: 'agent',   avatar: '⬡', title: 'hades',    subtitle: 'review agent · idle',   presence: 'idle',   hb: 'idle · 4m ago',   task: 'None',                         taskMeta: 'queue empty' },
+  watchdog:  { type: 'agent',   avatar: '⬡', title: 'watchdog', subtitle: 'monitoring · online',   presence: 'online', hb: 'active · 2m ago', task: 'Fleet health check',            taskMeta: 'recurring · every 5m' },
+  lex:       { type: 'user',    avatar: 'L',  title: 'Lex',      subtitle: 'founder · online',      presence: 'online',  hb: null },
+  general:   { type: 'channel', avatar: '#',  title: '#general', subtitle: '8 members · 2 active',  members: ['Lex', 'forge', 'watchdog', '+5'] },
+  design:    { type: 'channel', avatar: '#',  title: '#design-review', subtitle: '4 members · 2 active', members: ['daedalus', 'forge', 'Lex', '+1'] },
+  ops:       { type: 'channel', avatar: '#',  title: '#ops-internal',  subtitle: '3 members · 0 active', members: ['hades', 'watchdog', 'Lex'] },
+  org:       { type: 'user',    avatar: 'O',  title: 'Optimus',  subtitle: 'workspace · 8 agents · 1 member' },
+}
+
+function openPane(n) {
+  const d = PANE_DATA[n.id]
+  if (!d) return
+
+  const header = document.getElementById('pane-header')
+  const body = document.getElementById('pane-body')
+
+  header.innerHTML = `
+    <div class="pane-avatar ${d.type}">${d.avatar}</div>
+    <div>
+      <div class="pane-title">${d.title}</div>
+      <div class="pane-subtitle">${d.subtitle}</div>
+    </div>
+    <button class="pane-close" onclick="closePane()">✕</button>
+  `
+
+  if (d.type === 'agent') {
+    const presColor = d.presence === 'online' ? 'var(--online)' : d.presence === 'idle' ? 'var(--idle)' : 'var(--offline)'
+    body.innerHTML = `
+      <div>
+        <div class="pane-section-title">Status</div>
+        <div class="pane-presence">
+          <div class="pane-presence-dot" style="background:${presColor};${d.presence==='online'?'box-shadow:0 0 5px rgba(72,200,130,0.7)':''}"></div>
+          <div class="pane-presence-label" style="color:${presColor}">${d.presence}</div>
+          <div class="pane-presence-since">${d.hb}</div>
+        </div>
+      </div>
+      <div>
+        <div class="pane-section-title">Current Task</div>
+        <div class="pane-task">
+          <div class="pane-task-title">${d.task}</div>
+          <div class="pane-task-meta">${d.taskMeta}</div>
+        </div>
+      </div>
+      <div>
+        <div class="pane-section-title">Heartbeat</div>
+        <div class="pane-stat-row"><span class="pane-stat-label">Last seen</span><span class="pane-stat-value">${d.hb}</span></div>
+        <div class="pane-stat-row"><span class="pane-stat-label">Interval</span><span class="pane-stat-value">30 min</span></div>
+      </div>
+      <div class="pane-actions">
+        <button class="btn-secondary">Open DM</button>
+        <button class="btn-primary">View tasks</button>
+      </div>
+    `
+  } else if (d.type === 'channel') {
+    const memberChips = (d.members || []).map(m =>
+      `<div style="padding:4px 10px;border-radius:6px;background:var(--bg-surface);border:1px solid var(--border);font-size:11px;color:var(--text-secondary);">${m}</div>`
+    ).join('')
+    body.innerHTML = `
+      <div>
+        <div class="pane-section-title">Members</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">${memberChips}</div>
+      </div>
+      <div>
+        <div class="pane-section-title">Activity</div>
+        <div class="pane-stat-row"><span class="pane-stat-label">Status</span><span class="pane-stat-value" style="color:var(--online)">active now</span></div>
+        <div class="pane-stat-row"><span class="pane-stat-label">Last message</span><span class="pane-stat-value">just now</span></div>
+      </div>
+      <div class="pane-actions">
+        <button class="btn-secondary">Add members</button>
+        <button class="btn-primary">Open channel</button>
+      </div>
+    `
+  } else {
+    body.innerHTML = `
+      <div>
+        <div class="pane-section-title">Workspace</div>
+        <div class="pane-stat-row"><span class="pane-stat-label">Agents</span><span class="pane-stat-value">8</span></div>
+        <div class="pane-stat-row"><span class="pane-stat-label">Members</span><span class="pane-stat-value">1</span></div>
+        <div class="pane-stat-row"><span class="pane-stat-label">Channels</span><span class="pane-stat-value">3</span></div>
+      </div>
+      <div class="pane-actions">
+        <button class="btn-primary">Settings</button>
+      </div>
+    `
+  }
+
+  document.getElementById('pane-overlay').classList.add('open')
+  document.getElementById('context-pane').classList.add('open')
+}
+
+function closePane() {
+  document.getElementById('pane-overlay').classList.remove('open')
+  document.getElementById('context-pane').classList.remove('open')
+}
+
+// ── FLEET HEALTH ─────────────────────────────────────────────────────────────
+
+const FLEET = [
+  { name: 'daedalus',  role: 'design',     health: 'online', status: 'active' },
+  { name: 'forge',     role: 'frontend',   health: 'online', status: 'active' },
+  { name: 'hades',     role: 'review',     health: 'idle',   status: 'idle 4m' },
+  { name: 'watchdog',  role: 'monitoring', health: 'online', status: 'active' },
+  { name: 'analyst',   role: 'analysis',   health: 'online', status: 'active' },
+  { name: 'apollo',    role: 'comms',      health: 'online', status: 'active' },
+  { name: 'security',  role: 'audit',      health: 'stale',  status: 'stale 14m' },
+  { name: 'hermes',    role: 'trading',    health: 'missed', status: 'missed 28m' },
+]
+
+const STATUS_ICONS = { online: '', idle: '', stale: '⚠', missed: '⚠' }
+
+function renderFleet() {
+  const stripe = document.getElementById('fleet-stripe')
+  FLEET.forEach(a => {
+    const card = document.createElement('div')
+    card.className = `agent-card ${a.health}`
+    card.innerHTML = `
+      <div class="card-name-row">
+        <div class="card-dot ${a.health}"></div>
+        <div class="card-name">${a.name}</div>
+      </div>
+      <div class="card-role">${a.role}</div>
+      <div class="card-status-row">
+        ${STATUS_ICONS[a.health] ? `<span class="card-status-icon" style="color:${a.health==='stale'?'var(--warning)':'var(--danger)'}">⚠</span>` : ''}
+        <span class="card-status-text ${a.health}">${a.status}</span>
+      </div>
+    `
+    card.addEventListener('click', () => {
+      const n = NODES.find(nd => nd.id === a.name)
+      if (n) openPane(n)
+      else {
+        // Still open a generic pane for agents not in graph
+        openPane({ id: a.name, type: 'agent', label: a.name, presence: a.health === 'online' ? 'online' : a.health === 'idle' ? 'idle' : 'offline' })
+        const d = { type:'agent', avatar:'⬡', title: a.name, subtitle: `${a.role} agent · ${a.health}`, presence: a.health === 'online'?'online':a.health==='idle'?'idle':'offline', hb: a.status, task:'—', taskMeta:'no active task' }
+        const body = document.getElementById('pane-body')
+        const presColor = a.health==='online'?'var(--online)':a.health==='idle'?'var(--idle)':'var(--danger)'
+        body.innerHTML = `
+          <div>
+            <div class="pane-section-title">Status</div>
+            <div class="pane-presence">
+              <div class="pane-presence-dot" style="background:${presColor}"></div>
+              <div class="pane-presence-label" style="color:${presColor}">${a.health}</div>
+              <div class="pane-presence-since">${a.status}</div>
+            </div>
+          </div>
+          <div>
+            <div class="pane-section-title">Heartbeat</div>
+            <div class="pane-stat-row"><span class="pane-stat-label">Last seen</span><span class="pane-stat-value">${a.status}</span></div>
+            <div class="pane-stat-row"><span class="pane-stat-label">Interval</span><span class="pane-stat-value">30 min</span></div>
+          </div>
+          <div class="pane-actions">
+            <button class="btn-secondary">Open DM</button>
+            <button class="btn-primary" style="${a.health==='missed'?'background:var(--danger);':''}">
+              ${a.health==='missed'?'Restart agent':'View tasks'}
+            </button>
+          </div>
+        `
+      }
+    })
+    stripe.appendChild(card)
+  })
+}
+
+// ── MOBILE NODE LIST ─────────────────────────────────────────────────────────
+
+function renderMobileNodeList() {
+  const el = document.getElementById('mobile-node-list')
+  el.innerHTML = ''
+
+  const presColor = { online: 'var(--online)', idle: 'var(--idle)', offline: 'var(--offline)' }
+  const presGlow  = { online: 'box-shadow:0 0 5px rgba(72,200,130,0.7);', idle: '', offline: '' }
+  // Map hbTier → dot pulse class for mobile
+  const hbDotClass = { fresh: 'dot-fresh', warming: 'dot-warming', stale: 'dot-stale', cold: '' }
+
+  const sections = [
+    { label: 'Agents', nodes: NODES.filter(n => n.type === 'agent').sort((a,b) => {
+        const order = { online:0, idle:1, offline:2 }
+        return (order[a.presence||'offline']||0) - (order[b.presence||'offline']||0)
+      })
+    },
+    { label: 'Channels', nodes: NODES.filter(n => n.type === 'channel') },
+    { label: 'Members',  nodes: NODES.filter(n => n.type === 'user') },
+  ]
+
+  sections.forEach(sec => {
+    if (!sec.nodes.length) return
+    const hdr = document.createElement('div')
+    hdr.className = 'mobile-section-header'
+    hdr.textContent = sec.label
+    el.appendChild(hdr)
+
+    sec.nodes.forEach(n => {
+      const row = document.createElement('div')
+      row.className = 'mobile-node-row'
+
+      const iconClass = n.type
+      const iconText  = n.type === 'agent' ? '⬡' : n.type === 'channel' ? '#' : n.type === 'user' ? n.label.charAt(0) : 'O'
+      const meta      = n.sublabel || (n.role ? n.role : '')
+      const dotPulse  = n.hbTier ? (hbDotClass[n.hbTier] || '') : ''
+      const presHtml  = n.presence ? `<div class="mobile-presence-dot ${dotPulse}" style="background:${presColor[n.presence]||'var(--offline)'};${presGlow[n.presence]||''}color:${presColor[n.presence]||'var(--offline)'}"></div>` : ''
+
+      row.innerHTML = `
+        <div class="mobile-node-icon ${iconClass}">${iconText}</div>
+        <div class="mobile-node-info">
+          <div class="mobile-node-name">${n.label}</div>
+          <div class="mobile-node-meta">${meta}</div>
+        </div>
+        <div class="mobile-node-right">${presHtml}</div>
+      `
+      row.addEventListener('click', () => openPane(n))
+      el.appendChild(row)
+    })
+  })
+}
+
+// ── MOBILE GRAPH MODAL ───────────────────────────────────────────────────────
+
+function openGraphModal() {
+  const wrap = document.getElementById('modal-svg-wrap')
+  // Clone the SVG into the modal (re-run initPositions for modal dimensions)
+  wrap.innerHTML = ''
+  const svgClone = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+  svgClone.style.width = '100%'
+  svgClone.style.height = '100%'
+
+  // Copy defs
+  const origSvg = document.getElementById('graph-svg')
+  const defs = origSvg.querySelector('defs').cloneNode(true)
+  svgClone.appendChild(defs)
+
+  const edgesLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+  edgesLayer.id = 'modal-edges'
+  const nodesLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+  nodesLayer.id = 'modal-nodes'
+  svgClone.appendChild(edgesLayer)
+  svgClone.appendChild(nodesLayer)
+  wrap.appendChild(svgClone)
+
+  document.getElementById('graph-modal').classList.add('open')
+  document.body.style.overflow = 'hidden'
+
+  // Re-layout for modal dimensions
+  requestAnimationFrame(() => {
+    const mW = wrap.clientWidth || 390
+    const mH = wrap.clientHeight || 500
+    // Shift positions to modal dimensions
+    const scaleX = mW / (W || 900)
+    const scaleY = mH / (H || 360)
+    const origPos = {}
+    NODES.forEach(n => {
+      origPos[n.id] = { x: POS[n.id].x * scaleX, y: POS[n.id].y * scaleY }
+    })
+    const savedPos = Object.assign({}, POS)
+    NODES.forEach(n => { POS[n.id] = origPos[n.id] })
+
+    // Draw into modal layers
+    edgesLayer.innerHTML = ''
+    nodesLayer.innerHTML = ''
+    EDGES.forEach(e => {
+      const edge = renderEdge(e)
+      edgesLayer.appendChild(edge)
+    })
+    NODES.forEach(n => {
+      const node = renderNode(n)
+      nodesLayer.appendChild(node)
+    })
+
+    // Restore
+    NODES.forEach(n => { POS[n.id] = savedPos[n.id] })
+  })
+}
+
+function closeGraphModal() {
+  document.getElementById('graph-modal').classList.remove('open')
+  document.body.style.overflow = ''
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+
+window.addEventListener('DOMContentLoaded', () => {
+  initPositions()
+  drawGraph()
+  renderFleet()
+  renderMobileNodeList()
+})
+
+window.addEventListener('resize', () => {
+  initPositions()
+  drawGraph()
+  renderMobileNodeList()
+})
+</script>
+</body>
+</html>
