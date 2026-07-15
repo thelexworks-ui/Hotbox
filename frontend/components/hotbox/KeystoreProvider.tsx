@@ -340,12 +340,13 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
             const { members } = await membersRes.json() as { members: string[] };
             if (members.length > 0) {
               await createChatKey(chatId, members);
-              // Re-fetch from server to confirm distribution (not IDB — want server confirmation)
-              const retry = await fetch(`/api/hotbox/keys?chat=${encodeURIComponent(chatId)}&member=${encodeURIComponent(activeMemberId)}`);
-              if (retry.ok) {
-                const bundle2 = await retry.json() as WrappedKeyBundle;
+              // createChatKey already stored raw CK bytes in IDB — use that directly rather
+              // than re-fetching the server bundle (avoids a second unwrapKey call that would
+              // fail if the private key or bundle shape has any mismatch).
+              const recovered = await (db as IDBPDatabase<HotboxDBSchema>).get('chat-keys', chatId);
+              if (recovered) {
                 console.info(`[keystore] getCK: createChatKey recovery succeeded for ${chatId}`);
-                return unwrapCK(chatId, activeMemberId, activePrivateKey, bundle2);
+                return crypto.subtle.importKey('raw', recovered.ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
               }
             }
           }
