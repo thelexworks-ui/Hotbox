@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readMessages, appendMessage } from '@/lib/hotbox/channel-service';
+import { validateMasterKey } from '@/lib/hotbox/master-key';
 import type { AegisEnvelope, AnyMessage, HotboxMessage } from '@/lib/hotbox/types';
 
 function isChatMsg(m: AnyMessage): m is HotboxMessage {
@@ -14,13 +15,20 @@ export async function GET(req: NextRequest, { params }: { params: { channelId: s
   const org = req.nextUrl.searchParams.get('org') ?? DEFAULT_ORG;
   const limit = Number(req.nextUrl.searchParams.get('limit') ?? 100);
   const threadParentId = req.nextUrl.searchParams.get('thread') ?? undefined;
+  const masterRole = validateMasterKey(req.headers.get('x-master-key'));
 
   const msgs = await readMessages(org, params.channelId, limit);
 
+  let filtered: AnyMessage[];
   if (threadParentId) {
-    return NextResponse.json(msgs.filter((m) => isChatMsg(m) && m.thread_parent_id === threadParentId));
+    filtered = msgs.filter((m) => isChatMsg(m) && m.thread_parent_id === threadParentId);
+  } else {
+    filtered = msgs.filter((m) => !isChatMsg(m) || !m.thread_parent_id);
   }
-  return NextResponse.json(msgs.filter((m) => !isChatMsg(m) || !m.thread_parent_id));
+
+  const res = NextResponse.json(filtered);
+  if (masterRole) res.headers.set('X-Role', masterRole);
+  return res;
 }
 
 export async function POST(req: NextRequest, { params }: { params: { channelId: string } }) {

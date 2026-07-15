@@ -80,6 +80,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json() as {
     memberId?: string;
     publicKey?: string;
+    role?: string;
     chatId?: string;
     wk?: string;
     epk?: string;
@@ -99,7 +100,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Public key registration: { memberId, publicKey }
+  // Public key registration: { memberId, publicKey, role? }
   // Identity check: caller may only register their own pubkey.
   if (body.memberId && body.publicKey) {
     const requesterId = getRequestingMemberId();
@@ -110,7 +111,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'cannot register pubkey for another member' }, { status: 403 });
     }
     try {
-      await storePublicKey(org, body.memberId, body.publicKey);
+      await storePublicKey(org, body.memberId, body.publicKey, body.role);
       return NextResponse.json({ ok: true });
     } catch {
       return NextResponse.json({ error: 'failed to store public key' }, { status: 500 });

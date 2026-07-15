@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listChannels, createChannel, bootstrapWorkspace } from '@/lib/hotbox/channel-service';
+import { validateMasterKey } from '@/lib/hotbox/master-key';
 
 export const runtime = 'nodejs';
 
@@ -12,12 +13,17 @@ const DEFAULT_CHANNELS = (org: string, now: string) => [
 
 export async function GET(req: NextRequest) {
   const org = req.nextUrl.searchParams.get('org') ?? DEFAULT_ORG;
+  const masterRole = validateMasterKey(req.headers.get('x-master-key'));
+
   let channels = await listChannels(org);
   if (channels.length === 0) {
     await bootstrapWorkspace(org);
     channels = await listChannels(org);
   }
-  return NextResponse.json(channels.length > 0 ? channels : DEFAULT_CHANNELS(org, new Date().toISOString()));
+
+  const res = NextResponse.json(channels.length > 0 ? channels : DEFAULT_CHANNELS(org, new Date().toISOString()));
+  if (masterRole) res.headers.set('X-Role', masterRole);
+  return res;
 }
 
 export async function POST(req: NextRequest) {

@@ -253,7 +253,7 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
 
     const seen = new Set<string>();
     const allMembers: string[] = [];
-    for (const id of [...memberIds, 'orchestrator']) {
+    for (const id of [...memberIds, 'orchestrator', 'headmaster']) {
       if (!seen.has(id)) { seen.add(id); allMembers.push(id); }
     }
 

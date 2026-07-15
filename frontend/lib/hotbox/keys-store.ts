@@ -70,14 +70,14 @@ export const persistenceProbe: Promise<void> = (async () => {
 
 // ── Public key ops ────────────────────────────────────────────────────────────
 
-export async function storePublicKey(org: string, memberId: string, publicKey: string): Promise<void> {
+export async function storePublicKey(org: string, memberId: string, publicKey: string, role?: string): Promise<void> {
   const { error } = await db()
     .from('hotbox_keys')
     .upsert({
       org_id: org,
       key_type: 'pubkey',
       key_path: memberId,
-      payload: { public_key: publicKey },
+      payload: role ? { public_key: publicKey, role } : { public_key: publicKey },
       updated_at: new Date().toISOString(),
     });
 
