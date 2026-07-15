@@ -3,23 +3,22 @@
 import { useEffect } from 'react';
 import { useWs } from './WsProvider';
 import { useKeystore } from './KeystoreProvider';
-import type { ServerMessage, WrappedKeyBundle } from '@/lib/hotbox/types';
+import type { ServerMessage } from '@/lib/hotbox/types';
 
-// Subscribes to key.rotated WS events and updates the local keystore cache.
-// Placed inside WsProvider so both useWs() and useKeystore() are reachable.
+// Subscribes to key.rotated WS events and evicts the local IDB cache entry.
+// Next getCK() call will re-fetch the new CK from the server.
 export function KeyRotationWatcher() {
   const { subscribe } = useWs();
-  const { cacheChatKey } = useKeystore();
+  const { evictCK } = useKeystore();
 
   useEffect(() => {
     return subscribe('key.rotated', (msg: ServerMessage) => {
-      const { chatId, bundle } = msg as unknown as { chatId?: string; bundle?: Partial<WrappedKeyBundle> };
-      // wiv is required per §6 fix — reject bundles missing it
-      if (chatId && bundle?.wk && bundle?.epk && bundle?.wiv) {
-        cacheChatKey(chatId, bundle as WrappedKeyBundle).catch(() => {});
+      const { chatId } = msg as unknown as { chatId?: string };
+      if (chatId) {
+        evictCK(chatId).catch(() => {});
       }
     });
-  }, [subscribe, cacheChatKey]);
+  }, [subscribe, evictCK]);
 
   return null;
 }

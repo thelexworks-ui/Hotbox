@@ -8,12 +8,6 @@ export interface AegisEnvelope {
   // epk intentionally absent — ephemeral public key lives in WrappedKeyBundle only (§6 fix)
 }
 
-export interface WrappedKeyBundle {
-  wk: string;         // base64 AES-GCM ciphertext of wrapped CK
-  epk: string;        // base64 raw X25519 ephemeral public key (for ECDH unwrap)
-  wiv: string;        // base64 12-byte AES-GCM IV used during wrap — required for unwrap (§6 fix)
-  ck_epoch?: string;  // ISO timestamp of last CK rotation — used for IDB staleness check
-}
 
 export interface HotboxMessage {
   id: string;

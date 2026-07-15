@@ -4,7 +4,6 @@ import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { KeyRotationWatcher } from './KeyRotationWatcher';
-import { KeyLossWarningModal } from './KeyLossWarningModal';
 import { NotificationsProvider } from './NotificationsProvider';
 import { useWs } from './WsProvider';
 import { useKeystore } from './KeystoreProvider';
@@ -106,21 +105,10 @@ function MobileTabBar({ onOpenDrawer }: { onOpenDrawer(): void }) {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { ready, initError, retryInit, keyLossAckRequired, acknowledgeKeyLoss } = useKeystore();
+  const { ready } = useKeystore();
   const [mobileDrawerOpen, setMobileDrawerOpen] = React.useState(false);
 
-  if (keyLossAckRequired) {
-    return (
-      <div className="flex flex-col h-screen" style={{ background: 'var(--hotbox-bg)' }}>
-        <KeyLossWarningModal onConfirm={acknowledgeKeyLoss} />
-      </div>
-    );
-  }
-
-  if (!ready) {
-    if (initError) return <KeystoreErrorScreen error={initError} onRetry={retryInit} />;
-    return <KeystoreLoadingScreen />;
-  }
+  if (!ready) return <KeystoreLoadingScreen />;
 
   return (
     <div className="flex flex-col h-screen">

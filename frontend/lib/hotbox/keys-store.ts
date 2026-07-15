@@ -1,12 +1,7 @@
 /**
- * Persistent key storage for Hotbox E2E encryption.
- * Supabase-backed — survives Vercel serverless cold starts.
- *
- * Table: hotbox_keys  (see migrations/002_hotbox_keys.sql)
- *   org_id   TEXT  — toadsage | etc.
- *   key_type TEXT  — 'pubkey' | 'wrapped'
- *   key_path TEXT  — memberId for pubkey; 'chatId:memberId' for wrapped
- *   payload  JSONB — { public_key } | { wk, epk, wiv }
+ * Server-held channel key storage.
+ * Each channel has one AES-GCM-256 CK generated at create time.
+ * Stored in hotbox_keys with key_type='ck', key_path=channelId, payload={ ck: base64 }.
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -29,8 +24,6 @@ function db(): SupabaseClient {
 }
 
 // ── Startup persistence probe ─────────────────────────────────────────────────
-// Runs once per cold start. Rejects if Supabase write+read-back fails, causing
-// every subsequent request to fail fast with 500 rather than a silent 404.
 
 export const persistenceProbe: Promise<void> = (async () => {
   const { error: writeErr } = await db()
@@ -68,144 +61,41 @@ export const persistenceProbe: Promise<void> = (async () => {
   console.log('[hotbox-keys] persistence probe PASS');
 })();
 
-// ── Public key ops ────────────────────────────────────────────────────────────
+// ── Channel key ops ───────────────────────────────────────────────────────────
 
-export async function storePublicKey(org: string, memberId: string, publicKey: string, role?: string): Promise<void> {
+export async function storeChannelKey(org: string, channelId: string, ckBase64: string): Promise<void> {
   const { error } = await db()
     .from('hotbox_keys')
     .upsert({
       org_id: org,
-      key_type: 'pubkey',
-      key_path: memberId,
-      payload: role ? { public_key: publicKey, role } : { public_key: publicKey },
+      key_type: 'ck',
+      key_path: channelId,
+      payload: { ck: ckBase64 },
       updated_at: new Date().toISOString(),
     });
 
   if (error) {
-    console.error('[hotbox-keys] ERROR storing public key', {
-      org, memberId, message: error.message, code: error.code,
-    });
+    console.error('[hotbox-keys] ERROR storing channel key', { org, channelId, message: error.message });
     throw error;
   }
 }
 
-export async function loadPublicKey(org: string, memberId: string): Promise<string | null> {
+export async function loadChannelKey(org: string, channelId: string): Promise<string | null> {
   const { data, error } = await db()
     .from('hotbox_keys')
     .select('payload')
     .eq('org_id', org)
-    .eq('key_type', 'pubkey')
-    .eq('key_path', memberId)
+    .eq('key_type', 'ck')
+    .eq('key_path', channelId)
     .single();
 
   if (error) {
     if (error.code !== 'PGRST116') {
-      console.error('[hotbox-keys] ERROR loading public key', { org, memberId, message: error.message });
+      console.error('[hotbox-keys] ERROR loading channel key', { org, channelId, message: error.message });
       throw error;
     }
     return null;
   }
 
-  return (data?.payload as { public_key?: string } | null)?.public_key ?? null;
-}
-
-// ── Wrapped key bundle ops ────────────────────────────────────────────────────
-
-export interface WrappedBundle { wk: string; epk: string; wiv: string; ck_epoch?: string }
-
-export async function storeWrappedBundle(
-  org: string, chatId: string, memberId: string,
-  wk: string, epk: string, wiv: string,
-): Promise<void> {
-  const { error } = await db()
-    .from('hotbox_keys')
-    .upsert({
-      org_id: org,
-      key_type: 'wrapped',
-      key_path: `${chatId}:${memberId}`,
-      payload: { wk, epk, wiv },
-      updated_at: new Date().toISOString(),
-    });
-
-  if (error) {
-    console.error('[hotbox-keys] ERROR storing wrapped bundle', {
-      org, chatId, memberId, message: error.message, code: error.code,
-    });
-    throw error;
-  }
-}
-
-export async function loadWrappedBundle(
-  org: string, chatId: string, memberId: string,
-): Promise<WrappedBundle | null> {
-  const { data, error } = await db()
-    .from('hotbox_keys')
-    .select('payload, updated_at')
-    .eq('org_id', org)
-    .eq('key_type', 'wrapped')
-    .eq('key_path', `${chatId}:${memberId}`)
-    .single();
-
-  if (error) {
-    if (error.code !== 'PGRST116') {
-      console.error('[hotbox-keys] ERROR loading wrapped bundle', { org, chatId, memberId, message: error.message });
-      throw error;
-    }
-    return null;
-  }
-
-  const row = data as { payload: WrappedBundle | null; updated_at?: string } | null;
-  const p = row?.payload;
-  if (!p?.wk || !p?.epk || !p?.wiv) return null;
-  return { ...p, ck_epoch: row?.updated_at };
-}
-
-// ── Member discovery ──────────────────────────────────────────────────────────
-
-export interface MemberDetail {
-  id: string;
-  name: string;
-  role: string;
-  pubkey: string;
-}
-
-export async function listAllMemberDetails(org: string): Promise<MemberDetail[]> {
-  const { data, error } = await db()
-    .from('hotbox_keys')
-    .select('key_path, payload')
-    .eq('org_id', org)
-    .eq('key_type', 'pubkey');
-
-  if (error) {
-    if (error.code !== 'PGRST116') {
-      console.error('[hotbox-keys] ERROR listing member details', { org, message: error.message });
-      throw error;
-    }
-    return [];
-  }
-
-  return (data ?? []).map((r: { key_path: string; payload: { public_key?: string; role?: string } | null }) => ({
-    id: r.key_path,
-    name: r.key_path,
-    role: r.payload?.role ?? 'user',
-    pubkey: r.payload?.public_key ?? '',
-  }));
-}
-
-export async function listRegisteredMembers(org: string): Promise<string[]> {
-  const { data, error } = await db()
-    .from('hotbox_keys')
-    .select('key_path')
-    .eq('org_id', org)
-    .eq('key_type', 'pubkey');
-
-  if (error) {
-    if (error.code !== 'PGRST116') {
-      console.error('[hotbox-keys] ERROR listing registered members', { org, message: error.message });
-      throw error;
-    }
-    return [];
-  }
-
-  return (data ?? []).map((r: { key_path: string }) => r.key_path);
+  return (data?.payload as { ck?: string } | null)?.ck ?? null;
 }

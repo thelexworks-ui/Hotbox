@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import type { AegisEnvelope, AnyMessage, HotboxMessage, SystemMessage } from './types';
+import { storeChannelKey } from './keys-store';
 
 // ── Singleton client ──────────────────────────────────────────────────────────
 
@@ -135,6 +136,10 @@ export async function createChannel(params: CreateChannelParams): Promise<Channe
 
   if (data) {
     void appendSystemMessage(params.org, channelId, `#${channelId} channel created`);
+    // Generate server-held AES-GCM-256 CK for the new channel. Fire-and-forget is
+    // intentional — channel row exists regardless; getCK on first send will hard-fail
+    // with a 404 if this write loses a race, surfacing the error to the user.
+    void storeChannelKey(params.org, channelId, crypto.randomBytes(32).toString('base64'));
   }
 
   return data ? rowToMeta(data as Parameters<typeof rowToMeta>[0]) : null;

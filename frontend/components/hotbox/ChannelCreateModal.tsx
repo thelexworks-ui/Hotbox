@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { useMembers, type Member } from '@/hooks/useMembers';
 import { MemberAvatar, RoleBadge } from './MembersPanel';
-import { useKeystore } from './KeystoreProvider';
 import type { ChannelMeta } from '@/store/hotbox';
 
 const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG ?? 'toadsage';
@@ -66,7 +65,6 @@ interface Props {
 
 export function ChannelCreateModal({ onCreated, onClose }: Props) {
   const allMembers = useMembers(30_000);
-  const { createChatKey } = useKeystore();
   const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState('');
   const [type, setType] = useState<ChannelType>('topic');
@@ -119,11 +117,6 @@ export function ChannelCreateModal({ onCreated, onClose }: Props) {
         return;
       }
       const ch = await res.json() as ChannelMeta;
-      try {
-        await createChatKey(ch.id, allMembers.map(m => m.id));
-      } catch (err) {
-        console.error('[channel-create] CK distribution failed:', err);
-      }
       onCreated(ch);
     } catch {
       setCreateError(`Couldn't create the channel — check your connection and try again.`);
