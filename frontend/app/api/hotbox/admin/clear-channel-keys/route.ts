@@ -19,12 +19,20 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const body = await req.json() as { channels?: string[]; org?: string };
-  const org = body.org ?? DEFAULT_ORG;
+  // Body is optional — bare DELETE with no payload clears the default set
+  let bodyData: { channels?: string[]; org?: string } = {};
+  try {
+    const ct = req.headers.get('content-type') ?? '';
+    if (ct.includes('application/json')) {
+      bodyData = await req.json() as { channels?: string[]; org?: string };
+    }
+  } catch { /* no body or non-JSON — use defaults */ }
+
+  const org = bodyData.org ?? DEFAULT_ORG;
 
   // Default: clear general, alerts, and any smoke-* channels
   // Caller may pass explicit list to override
-  let channels: string[] = body.channels ?? [];
+  let channels: string[] = bodyData.channels ?? [];
 
   const db = buildClient();
 
