@@ -25,6 +25,10 @@ const P = {
   agentEdge:       '#00D4FF',
 } as const;
 
+// Module-level drag flag: set true during pointermove > 4px so AgentNodeMesh onClick ignores
+// the synthetic click that fires on pointerup after a drag.
+const globalDraggedRef = { current: false };
+
 // â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type NodeState = 'fresh' | 'warming' | 'stale' | 'cold';
@@ -347,7 +351,7 @@ function AgentNodeMesh({
         ref={coreRef}
         onPointerOver={() => setHovered(true)}
         onPointerOut={() => setHovered(false)}
-        onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopPropagation(); handleSelect(); }}
+        onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopPropagation(); if (!globalDraggedRef.current) handleSelect(); }}
       >
         <sphereGeometry args={[0.028, 12, 12]} />
         <meshBasicMaterial
@@ -698,10 +702,10 @@ function Scene({ animate, onNodeSelect }: { animate: boolean; onNodeSelect?: (ag
 // â”€â”€ Camera auto-orbit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function CameraRig({ animate }: { animate: boolean }) {
-  const { camera } = useThree();
-  const thetaRef        = useRef(0);
-  const autoRef         = useRef(animate);
-  const lastActivityRef = useRef(0);
+  const { camera, gl } = useThree();
+  const thetaRef    = useRef(0);
+  const autoRef     = useRef(animate);
+  const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     (camera as THREE.PerspectiveCamera).fov = 55;
@@ -718,25 +722,59 @@ function CameraRig({ animate }: { animate: boolean }) {
   });
 
   useEffect(() => {
-    const onActivity = () => {
-      lastActivityRef.current = Date.now();
-      autoRef.current = false;
-      // Sync theta so orbit resumes from current angle
-      thetaRef.current = Math.atan2(camera.position.x, camera.position.z);
-    };
-    const interval = setInterval(() => {
-      if (!autoRef.current && Date.now() - lastActivityRef.current > 5000) {
+    const canvas = gl.domElement;
+    let pressed    = false;
+    let startX     = 0;
+    let startTheta = 0;
+
+    const scheduleResume = () => {
+      if (resumeTimer.current) clearTimeout(resumeTimer.current);
+      resumeTimer.current = setTimeout(() => {
         autoRef.current = animate;
-      }
-    }, 500);
-    window.addEventListener('pointermove', onActivity, { passive: true });
-    window.addEventListener('pointerdown', onActivity, { passive: true });
-    return () => {
-      window.removeEventListener('pointermove', onActivity);
-      window.removeEventListener('pointerdown', onActivity);
-      clearInterval(interval);
+      }, 2000);
     };
-  }, [animate, camera]);
+
+    const onDown = (e: PointerEvent) => {
+      pressed = true;
+      startX  = e.clientX;
+      startTheta = Math.atan2(camera.position.x, camera.position.z);
+      autoRef.current = false;
+      globalDraggedRef.current = false;
+      if (resumeTimer.current) clearTimeout(resumeTimer.current);
+    };
+
+    const onMove = (e: PointerEvent) => {
+      if (!pressed) return;
+      const dx = e.clientX - startX;
+      if (Math.abs(dx) > 4) globalDraggedRef.current = true;
+      thetaRef.current = startTheta - dx * 0.005;
+      const r = Math.sqrt(camera.position.x ** 2 + camera.position.z ** 2);
+      camera.position.x = r * Math.sin(thetaRef.current);
+      camera.position.z = r * Math.cos(thetaRef.current);
+      camera.lookAt(0, 0, 0);
+    };
+
+    const onUp = () => {
+      if (!pressed) return;
+      pressed = false;
+      scheduleResume();
+    };
+
+    canvas.addEventListener('pointerdown', onDown);
+    canvas.addEventListener('pointermove', onMove);
+    canvas.addEventListener('pointerup',     onUp);
+    canvas.addEventListener('pointerleave',  onUp);
+    canvas.addEventListener('pointercancel', onUp);
+
+    return () => {
+      canvas.removeEventListener('pointerdown', onDown);
+      canvas.removeEventListener('pointermove', onMove);
+      canvas.removeEventListener('pointerup',     onUp);
+      canvas.removeEventListener('pointerleave',  onUp);
+      canvas.removeEventListener('pointercancel', onUp);
+      if (resumeTimer.current) clearTimeout(resumeTimer.current);
+    };
+  }, [animate, camera, gl]);
 
   return null;
 }
