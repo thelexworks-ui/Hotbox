@@ -17,6 +17,12 @@ interface WsContext {
   /** Returns true if the message was delivered to the socket, false if the socket was not OPEN. */
   send(msg: ClientMessage): boolean;
   subscribe(type: ServerMessageType, handler: Handler): () => void;
+  /**
+   * Send the pending replay request (if any).
+   * Must be called AFTER channel.join messages are sent — the server only replays
+   * channels the session is subscribed to, so replay before channel.join yields nothing.
+   */
+  sendReplay(): void;
 }
 
 const Ctx = createContext<WsContext | null>(null);
@@ -35,6 +41,8 @@ export function WsProvider({ children }: { children: React.ReactNode }) {
   const handlersRef = useRef<Map<ServerMessageType, Set<Handler>>>(new Map());
   // Stable ref to connect so ws.onclose can schedule reconnect without stale closure
   const connectRef = useRef<() => void>(() => {});
+  // Pending replay params — set on hello, consumed by sendReplay() after channel.join batch
+  const pendingReplayRef = useRef<{ after_id?: string; since?: string } | null>(null);
 
   const dispatch = useCallback((msg: ServerMessage) => {
     const handlers = handlersRef.current.get(msg.type);
@@ -63,17 +71,17 @@ export function WsProvider({ children }: { children: React.ReactNode }) {
           try {
             const msg = JSON.parse(ev.data) as ServerMessage;
 
-            // A4: gate 'open' status + replay request on hello receipt
+            // A4: gate 'open' status + stage replay on hello receipt.
+            // Replay is NOT sent here — it's deferred until sendReplay() is called
+            // AFTER channel.join messages, because the server only replays subscribed
+            // channels and subscribed_channels is empty at this point in the handshake.
             if (msg.type === 'hello') {
               attemptRef.current = 0;
               setStatus('open');
               const lastId = sessionStorage.getItem(CURSOR_ID_KEY);
               const lastTs = sessionStorage.getItem(CURSOR_TS_KEY);
               if (lastId || lastTs) {
-                ws.send(JSON.stringify({
-                  type: 'replay',
-                  ...(lastId ? { after_id: lastId } : { since: lastTs }),
-                }));
+                pendingReplayRef.current = lastId ? { after_id: lastId } : { since: lastTs! };
               }
               dispatch(msg);
               return;
@@ -145,8 +153,17 @@ export function WsProvider({ children }: { children: React.ReactNode }) {
     return () => { handlersRef.current.get(type)?.delete(handler); };
   }, []);
 
+  const sendReplay = useCallback(() => {
+    const req = pendingReplayRef.current;
+    if (!req) return;
+    pendingReplayRef.current = null;
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'replay', ...req }));
+    }
+  }, []);
+
   return (
-    <Ctx.Provider value={{ status, send, subscribe }}>
+    <Ctx.Provider value={{ status, send, subscribe, sendReplay }}>
       {children}
     </Ctx.Provider>
   );

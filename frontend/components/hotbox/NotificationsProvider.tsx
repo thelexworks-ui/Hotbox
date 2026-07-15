@@ -196,7 +196,7 @@ function NotificationPanel({
 // ── NotificationsProvider (mounts inside AppShell) ───────────────────────────
 
 export function NotificationsProvider() {
-  const { subscribe }  = useWs();
+  const { subscribe, send, status, sendReplay } = useWs();
   const channels       = useHotboxStore((s) => s.channels);
   const pathname       = usePathname();
 
@@ -205,6 +205,12 @@ export function NotificationsProvider() {
   const [panelOpen, setPanelOpen]   = useState(false);
   const toastTimer                  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const panelRef                    = useRef<HTMLDivElement>(null);
+
+  // Refs so the subscription handler always has current values without being in deps
+  const pathnameRef = useRef(pathname);
+  const channelsRef = useRef(channels);
+  useEffect(() => { pathnameRef.current = pathname; }, [pathname]);
+  useEffect(() => { channelsRef.current = channels; }, [channels]);
 
   const dismissToast = useCallback(() => {
     setToast(null);
@@ -215,16 +221,26 @@ export function NotificationsProvider() {
     setHistory((prev) => prev.map((n) => ({ ...n, read: true })));
   }, []);
 
-  // Subscribe to incoming messages
+  // Global channel subscription: join all channels so msg.new is delivered from any
+  // channel, not just the one ChannelView is currently rendering. Then fire the
+  // deferred replay — server replays only subscribed channels, so replay must come
+  // AFTER channel.join, not on hello (which is the WS handshake before any joins).
+  useEffect(() => {
+    if (status !== 'open' || channels.length === 0) return;
+    channels.forEach((ch) => send({ type: 'channel.join', channel_id: ch.id }));
+    sendReplay();
+  }, [status, channels, send, sendReplay]);
+
+  // Subscribe to incoming messages — stable subscription (refs carry current state)
   useEffect(() => {
     return subscribe('msg.new', (serverMsg) => {
       const m = serverMsg.message as HotboxMessage | undefined;
       if (!m) return;
 
       const channelId = m.channel_id;
-      if (isViewingChannel(channelId, pathname)) return;
+      if (isViewingChannel(channelId, pathnameRef.current)) return;
 
-      const channel     = channels.find((c) => c.id === channelId);
+      const channel     = channelsRef.current.find((c) => c.id === channelId);
       const channelName = channel?.name?.replace(/^#/, '') ?? channelId;
       const href        = channelHref(channelId);
 
@@ -245,7 +261,7 @@ export function NotificationsProvider() {
       setToast(notification);
       toastTimer.current = setTimeout(() => setToast(null), TOAST_DURATION_MS);
     });
-  }, [subscribe, channels, pathname, dismissToast]);
+  }, [subscribe, dismissToast]);
 
   // Mark notifications for current channel as read when navigating to it
   useEffect(() => {
