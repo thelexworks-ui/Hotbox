@@ -48,10 +48,13 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
       pendingRef.current.delete(ack.nonce);
       const confirmed: HotboxMessage = { ...pending, id: ack.message_id, ts: ack.ts, _pending: false };
       reconcilePending(ack.channel_id, ack.nonce, confirmed);
-      // Advance replay cursor — sender is excluded from msg.new fanOut so the cursor
+      // Advance ts cursor for replay — sender is excluded from msg.new fanOut so ts
       // never advances for own messages, causing reconnect-replay to re-deliver them.
-      sessionStorage.setItem('hotbox:lastSeenId', ack.message_id);
-      sessionStorage.setItem('hotbox:lastSeenTs', ack.ts);
+      // Set to ack.ts-1ms so readMessagesSince (exclusive: ts > sinceTs) includes the
+      // acked message on next replay. Do NOT advance lastSeenId — the id-anchor path is
+      // exclusive too, making own message the anchor and excluding it from replay.
+      const sinceTs = new Date(new Date(ack.ts).getTime() - 1).toISOString();
+      sessionStorage.setItem('hotbox:lastSeenTs', sinceTs);
     });
   }, [subscribe, reconcilePending]);
 

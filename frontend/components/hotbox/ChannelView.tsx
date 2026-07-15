@@ -27,6 +27,7 @@ function MessageRow({ msg }: { msg: AnyMessage }) {
   const [text, setText] = React.useState<string | null>(null);
 
   useEffect(() => {
+    console.log('[MessageRow:effect] id=' + (isHotboxMsg(msg) ? msg.id : 'sys') + ' type=' + msg.type + ' _pending=' + (isHotboxMsg(msg) ? msg._pending : false) + ' _text=' + (isHotboxMsg(msg) ? (msg._text ?? 'none') : 'n/a'));
     if (!isHotboxMsg(msg)) { setText(msg.content); return; }
     // Optimistic messages carry _text directly (no decryption needed)
     if (msg._text) { setText(msg._text); return; }
@@ -151,10 +152,12 @@ export function ChannelView({ channelId, isDm }: Props) {
 
     unsubs.push(subscribe('msg.new', (msg: ServerMessage) => {
       const m = msg.message as AnyMessage | undefined;
+      console.log('[ChannelView:msg.new] ch=' + channelId + ' recv_ch=' + (m?.channel_id ?? 'none') + ' id=' + ((m as HotboxMessage | undefined)?.id ?? '') + ' _text=' + ((m as HotboxMessage | undefined)?._text ?? 'none'));
       if (!m || m.channel_id !== channelId) return;
       if (isHotboxMsg(m) && m.thread_parent_id) {
         incrementThreadCount(channelId, m.thread_parent_id);
       } else {
+        console.log('[ChannelView:appendMessage] ch=' + channelId + ' id=' + (isHotboxMsg(m) ? m.id : 'sys') + ' calling store.appendMessage');
         appendMessage(channelId, m);
         virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth' });
       }
