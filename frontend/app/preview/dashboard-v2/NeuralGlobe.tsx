@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Billboard, Stars } from '@react-three/drei';
+import { Stars } from '@react-three/drei';
 import { EffectComposer, Bloom, ChromaticAberration, Vignette } from '@react-three/postprocessing';
 import * as THREE from 'three';
 
@@ -633,6 +633,25 @@ function CameraRig({ animate }: { animate: boolean }) {
   return null;
 }
 
+// ── Post-processing — UnsignedByteType framebuffer for iOS Safari compatibility ──
+// Default HalfFloatType render targets fail on mobile Safari (texture format not
+// guaranteed). mipmapBlur dropped — requires MRT not available on all WebGL 2 impls.
+
+function PostFX() {
+  const chromaOffset = useRef(new THREE.Vector2(0.0004, 0.0003));
+  return (
+    <EffectComposer frameBufferType={THREE.UnsignedByteType}>
+      <Bloom luminanceThreshold={0.15} luminanceSmoothing={0.1} intensity={1.8} />
+      <ChromaticAberration
+        offset={chromaOffset.current}
+        radialModulation={false}
+        modulationOffset={0}
+      />
+      <Vignette darkness={0.60} offset={0.45} eskil={false} />
+    </EffectComposer>
+  );
+}
+
 // ── Root ──────────────────────────────────────────────────────────────────────
 
 const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG ?? 'toadsage';
@@ -647,7 +666,6 @@ export default function NeuralGlobe({ prefersReduced }: { prefersReduced: boolea
         gl={{
           antialias: true,
           alpha: false,
-          powerPreference: 'high-performance',
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.0,
         }}
@@ -655,21 +673,7 @@ export default function NeuralGlobe({ prefersReduced }: { prefersReduced: boolea
       >
         <Scene animate={animate} />
         <CameraRig animate={animate} />
-
-        <EffectComposer>
-          <Bloom
-            luminanceThreshold={0.15}
-            luminanceSmoothing={0.1}
-            intensity={1.8}
-            mipmapBlur
-          />
-          <ChromaticAberration
-            offset={new THREE.Vector2(0.0004, 0.0003)}
-            radialModulation={false}
-            modulationOffset={0}
-          />
-          <Vignette darkness={0.60} offset={0.45} eskil={false} />
-        </EffectComposer>
+        <PostFX />
       </Canvas>
 
       <div style={{
