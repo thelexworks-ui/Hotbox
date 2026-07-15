@@ -33,6 +33,7 @@ function MessageRow({ msg }: { msg: AnyMessage }) {
     if (msg._text) { setText(msg._text); return; }
     const env = msg.crypto_envelope;
     console.log('[MessageRow:decrypt-call] kid=' + (env?.kid ?? 'MISSING') + ' env_present=' + !!env);
+    if (!env || !env.kid) { setText('[legacy — no envelope]'); return; }
     decrypt(env)
       .then((t) => setText(t))
       .catch(async (firstErr) => {
