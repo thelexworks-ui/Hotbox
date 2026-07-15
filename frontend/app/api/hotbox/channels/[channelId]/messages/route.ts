@@ -31,6 +31,9 @@ export async function GET(req: NextRequest, { params }: { params: { channelId: s
   return res;
 }
 
+const WS_INTERNAL_URL = process.env.HOTBOX_WS_INTERNAL_URL ?? 'http://localhost:8080';
+const INTERNAL_SECRET  = process.env.HOTBOX_INTERNAL_SECRET;
+
 export async function POST(req: NextRequest, { params }: { params: { channelId: string } }) {
   const body = await req.json() as { crypto_envelope: AegisEnvelope; sender_id: string; thread_parent_id?: string; org?: string };
   const { crypto_envelope, sender_id, thread_parent_id } = body;
@@ -45,6 +48,18 @@ export async function POST(req: NextRequest, { params }: { params: { channelId: 
     envelope: crypto_envelope,
     threadParentId: thread_parent_id,
   });
+
+  // Push msg.new to WS subscribers via internal fanOut endpoint.
+  // Fire-and-forget — response already returned; log failures but never block.
+  if (INTERNAL_SECRET) {
+    fetch(`${WS_INTERNAL_URL}/internal/fanout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-internal-secret': INTERNAL_SECRET },
+      body: JSON.stringify({ org, channelId: params.channelId, message: { type: 'msg.new', message: msg } }),
+    }).catch((err) => console.warn('[messages-route] internal fanOut failed:', err));
+  } else {
+    console.warn('[messages-route] HOTBOX_INTERNAL_SECRET not set — WS fanOut skipped on HTTP fallback');
+  }
 
   return NextResponse.json(msg, { status: 201 });
 }

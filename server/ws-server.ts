@@ -502,6 +502,8 @@ function handleConnection(ws: WebSocket, req: IncomingMessage): void {
 // HTTP server + WebSocket upgrade
 // --------------------------------------------------------------------------
 
+const INTERNAL_SECRET = process.env.HOTBOX_INTERNAL_SECRET;
+
 const httpServer = createServer((req, res) => {
   // Health check endpoint
   if (req.url === '/health') {
@@ -513,6 +515,31 @@ const httpServer = createServer((req, res) => {
     }));
     return;
   }
+
+  // Internal fanOut endpoint — used by Next.js HTTP fallback path to push msg.new
+  // when WS send is unavailable. Auth-gated: requires HOTBOX_INTERNAL_SECRET header.
+  if (req.url === '/internal/fanout' && req.method === 'POST') {
+    if (!INTERNAL_SECRET || req.headers['x-internal-secret'] !== INTERNAL_SECRET) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'unauthorized' }));
+      return;
+    }
+    let body = '';
+    req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+    req.on('end', () => {
+      try {
+        const { org, channelId, message } = JSON.parse(body) as { org: string; channelId: string; message: object };
+        fanOut(org, channelId, message);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'bad request' }));
+      }
+    });
+    return;
+  }
+
   res.writeHead(426, { 'Content-Type': 'text/plain' });
   res.end('Upgrade Required');
 });
