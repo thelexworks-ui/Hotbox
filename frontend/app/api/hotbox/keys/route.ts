@@ -6,6 +6,7 @@ import {
   loadPublicKey,
   storeWrappedBundle,
   loadWrappedBundle,
+  listRegisteredMembers,
 } from '@/lib/hotbox/keys-store';
 
 export const runtime = 'nodejs';
@@ -28,9 +29,20 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Key storage unavailable' }, { status: 503 });
   }
 
+  const type = req.nextUrl.searchParams.get('type');
   const chat = req.nextUrl.searchParams.get('chat');
   const member = req.nextUrl.searchParams.get('member');
   const org = req.nextUrl.searchParams.get('org') ?? DEFAULT_ORG;
+
+  // Registered member list: /api/hotbox/keys?type=members
+  if (type === 'members') {
+    try {
+      const members = await listRegisteredMembers(org);
+      return NextResponse.json({ members });
+    } catch {
+      return NextResponse.json({ error: 'member list failed' }, { status: 500 });
+    }
+  }
 
   // Public key lookup: /api/hotbox/keys?member=<memberId>
   if (member && !chat) {

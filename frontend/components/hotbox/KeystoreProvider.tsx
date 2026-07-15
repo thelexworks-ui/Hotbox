@@ -240,75 +240,6 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
     return crypto.subtle.importKey('raw', ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
   }, []);
 
-  // ---------- Internal: get or derive CK for a chat ----------
-
-  const getCK = useCallback(async (chatId: string): Promise<CryptoKey> => {
-    const db = dbRef.current!;
-    const cached = await (db as IDBPDatabase<HotboxDBSchema>).get('chat-keys', chatId);
-    if (cached) {
-      return crypto.subtle.importKey('raw', cached.ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
-    }
-
-    const useOrch = orchestratorMode && orchestratorPrivateKeyRef.current !== null;
-    const activePrivateKey = useOrch ? orchestratorPrivateKeyRef.current! : privateKeyRef.current!;
-    const activeMemberId = useOrch ? 'orchestrator' : memberIdRef.current;
-
-    const res = await fetch(`/api/hotbox/keys?chat=${encodeURIComponent(chatId)}&member=${encodeURIComponent(activeMemberId)}`);
-    if (!res.ok) {
-      // No server-side bundle (server storage cold/missing) — auto-generate local channel key.
-      // Enables single-user send/receive without server key exchange.
-      // Telemetry: log so this fallback path is observable (not silent).
-      console.warn(`[keystore] no wrapped bundle for ${activeMemberId} in ${chatId} (${res.status}) — generating local channel key`);
-      const rawCk = crypto.getRandomValues(new Uint8Array(32));
-      const ck = await crypto.subtle.importKey('raw', rawCk, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
-      const ckBytes = await crypto.subtle.exportKey('raw', ck);
-      await (db as IDBPDatabase<HotboxDBSchema>).put('chat-keys', { id: chatId, ckBytes, cached_at: new Date().toISOString() });
-      return crypto.subtle.importKey('raw', ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
-    }
-    const bundle = await res.json() as WrappedKeyBundle;
-
-    return unwrapCK(chatId, activeMemberId, activePrivateKey, bundle);
-  }, [orchestratorMode, unwrapCK]);
-
-  // ---------- Exposed: encrypt ----------
-
-  const encrypt = useCallback(async (chatId: string, plaintext: string): Promise<AegisEnvelope> => {
-    const ck = await getCK(chatId);
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const cipherbytes = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, ck, new TextEncoder().encode(plaintext));
-    const ct = new Uint8Array(cipherbytes);
-    return {
-      v: 2,
-      alg: 'aes-256-gcm',
-      kid: chatId,
-      iv: bytesToB64(iv),
-      ciphertext: bytesToB64(ct.slice(0, -16)),
-      tag: bytesToB64(ct.slice(-16)),
-    };
-  }, [getCK]);
-
-  // ---------- Exposed: decrypt ----------
-
-  const decrypt = useCallback(async (envelope: AegisEnvelope): Promise<string> => {
-    const ck = await getCK(envelope.kid);
-    const ct = new Uint8Array(b64ToBytes(envelope.ciphertext));
-    const tag = new Uint8Array(b64ToBytes(envelope.tag));
-    const ctWithTag = new Uint8Array(new ArrayBuffer(ct.length + tag.length));
-    ctWithTag.set(ct);
-    ctWithTag.set(tag, ct.length);
-    const plainbytes = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64ToBytes(envelope.iv) }, ck, ctWithTag);
-    return new TextDecoder().decode(plainbytes);
-  }, [getCK]);
-
-  // ---------- Exposed: cacheChatKey — pre-warm CK cache from a received bundle ----------
-
-  const cacheChatKey = useCallback(async (chatId: string, bundle: WrappedKeyBundle): Promise<void> => {
-    const useOrch = orchestratorMode && orchestratorPrivateKeyRef.current !== null;
-    const activePrivateKey = useOrch ? orchestratorPrivateKeyRef.current! : privateKeyRef.current!;
-    const activeMemberId = useOrch ? 'orchestrator' : memberIdRef.current;
-    await unwrapCK(chatId, activeMemberId, activePrivateKey, bundle);
-  }, [orchestratorMode, unwrapCK]);
-
   // ---------- Exposed: createChatKey — generate CK + distribute wrapped bundles ----------
 
   const createChatKey = useCallback(async (chatId: string, memberIds: string[]): Promise<void> => {
@@ -374,6 +305,92 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
     const ckBytes = await crypto.subtle.exportKey('raw', ck);
     await (db as IDBPDatabase<HotboxDBSchema>).put('chat-keys', { id: chatId, ckBytes, cached_at: new Date().toISOString() });
   }, []);
+
+  // ---------- Internal: get or derive CK for a chat ----------
+
+  const getCK = useCallback(async (chatId: string): Promise<CryptoKey> => {
+    const db = dbRef.current!;
+    const cached = await (db as IDBPDatabase<HotboxDBSchema>).get('chat-keys', chatId);
+    if (cached) {
+      return crypto.subtle.importKey('raw', cached.ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+    }
+
+    const useOrch = orchestratorMode && orchestratorPrivateKeyRef.current !== null;
+    const activePrivateKey = useOrch ? orchestratorPrivateKeyRef.current! : privateKeyRef.current!;
+    const activeMemberId = useOrch ? 'orchestrator' : memberIdRef.current;
+
+    const res = await fetch(`/api/hotbox/keys?chat=${encodeURIComponent(chatId)}&member=${encodeURIComponent(activeMemberId)}`);
+    if (!res.ok) {
+      if (res.status === 404) {
+        // No wrapped bundle for this member — enumerate all registered org members and
+        // distribute a new CK so every member can decrypt cross-session.
+        try {
+          const membersRes = await fetch(`/api/hotbox/keys?type=members&org=${encodeURIComponent(ORG)}`);
+          if (membersRes.ok) {
+            const { members } = await membersRes.json() as { members: string[] };
+            if (members.length > 0) {
+              await createChatKey(chatId, members);
+              const ck2 = await (db as IDBPDatabase<HotboxDBSchema>).get('chat-keys', chatId);
+              if (ck2) {
+                return crypto.subtle.importKey('raw', ck2.ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('[keystore] getCK: member-enumeration fallback failed', err);
+        }
+      }
+      // Final fallback: local-only key (single-user, not cross-session readable).
+      console.warn(`[keystore] no wrapped bundle for ${activeMemberId} in ${chatId} (${res.status}) — generating local channel key`);
+      const rawCk = crypto.getRandomValues(new Uint8Array(32));
+      const ck = await crypto.subtle.importKey('raw', rawCk, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+      const ckBytes = await crypto.subtle.exportKey('raw', ck);
+      await (db as IDBPDatabase<HotboxDBSchema>).put('chat-keys', { id: chatId, ckBytes, cached_at: new Date().toISOString() });
+      return crypto.subtle.importKey('raw', ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+    }
+    const bundle = await res.json() as WrappedKeyBundle;
+
+    return unwrapCK(chatId, activeMemberId, activePrivateKey, bundle);
+  }, [orchestratorMode, unwrapCK, createChatKey]);
+
+  // ---------- Exposed: encrypt ----------
+
+  const encrypt = useCallback(async (chatId: string, plaintext: string): Promise<AegisEnvelope> => {
+    const ck = await getCK(chatId);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const cipherbytes = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, ck, new TextEncoder().encode(plaintext));
+    const ct = new Uint8Array(cipherbytes);
+    return {
+      v: 2,
+      alg: 'aes-256-gcm',
+      kid: chatId,
+      iv: bytesToB64(iv),
+      ciphertext: bytesToB64(ct.slice(0, -16)),
+      tag: bytesToB64(ct.slice(-16)),
+    };
+  }, [getCK]);
+
+  // ---------- Exposed: decrypt ----------
+
+  const decrypt = useCallback(async (envelope: AegisEnvelope): Promise<string> => {
+    const ck = await getCK(envelope.kid);
+    const ct = new Uint8Array(b64ToBytes(envelope.ciphertext));
+    const tag = new Uint8Array(b64ToBytes(envelope.tag));
+    const ctWithTag = new Uint8Array(new ArrayBuffer(ct.length + tag.length));
+    ctWithTag.set(ct);
+    ctWithTag.set(tag, ct.length);
+    const plainbytes = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64ToBytes(envelope.iv) }, ck, ctWithTag);
+    return new TextDecoder().decode(plainbytes);
+  }, [getCK]);
+
+  // ---------- Exposed: cacheChatKey — pre-warm CK cache from a received bundle ----------
+
+  const cacheChatKey = useCallback(async (chatId: string, bundle: WrappedKeyBundle): Promise<void> => {
+    const useOrch = orchestratorMode && orchestratorPrivateKeyRef.current !== null;
+    const activePrivateKey = useOrch ? orchestratorPrivateKeyRef.current! : privateKeyRef.current!;
+    const activeMemberId = useOrch ? 'orchestrator' : memberIdRef.current;
+    await unwrapCK(chatId, activeMemberId, activePrivateKey, bundle);
+  }, [orchestratorMode, unwrapCK]);
 
   // ---------- Exposed: loadOrchestratorKey — enable Lex's full-org read mode ----------
 

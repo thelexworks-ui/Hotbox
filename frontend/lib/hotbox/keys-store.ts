@@ -158,3 +158,23 @@ export async function loadWrappedBundle(
   if (!p?.wk || !p?.epk || !p?.wiv) return null;
   return p;
 }
+
+// ── Member discovery ──────────────────────────────────────────────────────────
+
+export async function listRegisteredMembers(org: string): Promise<string[]> {
+  const { data, error } = await db()
+    .from('hotbox_keys')
+    .select('key_path')
+    .eq('org_id', org)
+    .eq('key_type', 'pubkey');
+
+  if (error) {
+    if (error.code !== 'PGRST116') {
+      console.error('[hotbox-keys] ERROR listing registered members', { org, message: error.message });
+      throw error;
+    }
+    return [];
+  }
+
+  return (data ?? []).map((r: { key_path: string }) => r.key_path);
+}
