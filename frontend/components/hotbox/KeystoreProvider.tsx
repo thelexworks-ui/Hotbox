@@ -23,7 +23,7 @@ function bytesToB64(buf: Uint8Array | ArrayBuffer): string {
 
 interface HotboxDBSchema {
   keypairs: { key: string; value: { id: string; publicKeyJwk: JsonWebKey; privateKeyJwk: JsonWebKey } };
-  'chat-keys': { key: string; value: { id: string; ckBytes: ArrayBuffer; cached_at: string } };
+  'chat-keys': { key: string; value: { id: string; ckBytes: ArrayBuffer; cached_at: string; ck_epoch?: string } };
 }
 
 // Retry pubkey registration with exponential backoff. Fire-and-forget (never blocks
@@ -242,7 +242,8 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
     );
 
     const ckBytes = await crypto.subtle.exportKey('raw', ck);
-    await (db as IDBPDatabase<HotboxDBSchema>).put('chat-keys', { id: chatId, ckBytes, cached_at: new Date().toISOString() });
+    await (db as IDBPDatabase<HotboxDBSchema>).put('chat-keys', { id: chatId, ckBytes, cached_at: new Date().toISOString(), ck_epoch: bundle.ck_epoch });
+    if (bundle.ck_epoch) sessionStorage.setItem(`hotbox-ck-epoch:${chatId}`, bundle.ck_epoch);
 
     return crypto.subtle.importKey('raw', ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
   }, []);
@@ -310,7 +311,9 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
 
     // ck is extractable; export raw bytes for IDB (Safari compat).
     const ckBytes = await crypto.subtle.exportKey('raw', ck);
-    await (db as IDBPDatabase<HotboxDBSchema>).put('chat-keys', { id: chatId, ckBytes, cached_at: new Date().toISOString() });
+    const epoch = new Date().toISOString();
+    await (db as IDBPDatabase<HotboxDBSchema>).put('chat-keys', { id: chatId, ckBytes, cached_at: epoch, ck_epoch: epoch });
+    sessionStorage.setItem(`hotbox-ck-epoch:${chatId}`, epoch);
     return ck;
   }, []);
 
@@ -319,7 +322,11 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
   const getCK = useCallback(async (chatId: string): Promise<CryptoKey> => {
     const db = dbRef.current!;
     const cached = await (db as IDBPDatabase<HotboxDBSchema>).get('chat-keys', chatId);
-    if (cached) {
+
+    // Fast path: already epoch-verified this page session — use IDB without a server round-trip.
+    // sessionStorage clears on hard-reload, ensuring STEP5 always re-verifies after page load.
+    const sessionEpoch = sessionStorage.getItem(`hotbox-ck-epoch:${chatId}`);
+    if (cached && sessionEpoch) {
       return crypto.subtle.importKey('raw', cached.ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
     }
 
@@ -356,11 +363,25 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
     }
     const bundle = await res.json() as WrappedKeyBundle;
 
+    // Epoch check: if IDB cache exists and epoch matches, it's current — skip unwrap.
+    if (cached && bundle.ck_epoch && cached.ck_epoch === bundle.ck_epoch) {
+      sessionStorage.setItem(`hotbox-ck-epoch:${chatId}`, bundle.ck_epoch);
+      return crypto.subtle.importKey('raw', cached.ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+    }
+
+    // Stale IDB or no cache — evict stale entry before unwrapping fresh bundle.
+    if (cached) {
+      console.info(`[keystore] getCK: epoch mismatch for ${chatId} (cached=${cached.ck_epoch ?? 'none'} server=${bundle.ck_epoch ?? 'none'}) — evicting and re-unwrapping`);
+      await (db as IDBPDatabase<HotboxDBSchema>).delete('chat-keys', chatId);
+    }
+
     // Wrap unwrapCK: on OperationError the session private key may not match the stored
     // bundle (new keypair vs stale server-side bundle from a prior session). Fall through
     // to createChatKey to re-distribute a fresh CK wrapped with the current pubkey.
     try {
-      return await unwrapCK(chatId, activeMemberId, activePrivateKey, bundle);
+      const ck = await unwrapCK(chatId, activeMemberId, activePrivateKey, bundle);
+      if (bundle.ck_epoch) sessionStorage.setItem(`hotbox-ck-epoch:${chatId}`, bundle.ck_epoch);
+      return ck;
     } catch (unwrapErr) {
       console.warn('[keystore] getCK: unwrapCK failed — key mismatch (new session vs stale bundle?); re-wrapping via createChatKey', unwrapErr);
     }

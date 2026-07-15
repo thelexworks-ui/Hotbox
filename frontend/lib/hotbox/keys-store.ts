@@ -111,7 +111,7 @@ export async function loadPublicKey(org: string, memberId: string): Promise<stri
 
 // ── Wrapped key bundle ops ────────────────────────────────────────────────────
 
-export interface WrappedBundle { wk: string; epk: string; wiv: string }
+export interface WrappedBundle { wk: string; epk: string; wiv: string; ck_epoch?: string }
 
 export async function storeWrappedBundle(
   org: string, chatId: string, memberId: string,
@@ -140,7 +140,7 @@ export async function loadWrappedBundle(
 ): Promise<WrappedBundle | null> {
   const { data, error } = await db()
     .from('hotbox_keys')
-    .select('payload')
+    .select('payload, updated_at')
     .eq('org_id', org)
     .eq('key_type', 'wrapped')
     .eq('key_path', `${chatId}:${memberId}`)
@@ -154,9 +154,10 @@ export async function loadWrappedBundle(
     return null;
   }
 
-  const p = data?.payload as WrappedBundle | null;
+  const row = data as { payload: WrappedBundle | null; updated_at?: string } | null;
+  const p = row?.payload;
   if (!p?.wk || !p?.epk || !p?.wiv) return null;
-  return p;
+  return { ...p, ck_epoch: row?.updated_at };
 }
 
 // ── Member discovery ──────────────────────────────────────────────────────────
