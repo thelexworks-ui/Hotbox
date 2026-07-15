@@ -356,7 +356,25 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
     }
     const bundle = await res.json() as WrappedKeyBundle;
 
-    return unwrapCK(chatId, activeMemberId, activePrivateKey, bundle);
+    // Wrap unwrapCK: on OperationError the session private key may not match the stored
+    // bundle (new keypair vs stale server-side bundle from a prior session). Fall through
+    // to createChatKey to re-distribute a fresh CK wrapped with the current pubkey.
+    try {
+      return await unwrapCK(chatId, activeMemberId, activePrivateKey, bundle);
+    } catch (unwrapErr) {
+      console.warn('[keystore] getCK: unwrapCK failed — key mismatch (new session vs stale bundle?); re-wrapping via createChatKey', unwrapErr);
+    }
+    // Re-derive: generate a new CK and distribute with current (freshly-registered) pubkeys
+    const membersRes = await fetch(`/api/hotbox/keys?type=members&org=${encodeURIComponent(ORG)}`);
+    if (membersRes.ok) {
+      const { members: recoveryMembers } = await membersRes.json() as { members: string[] };
+      if (recoveryMembers.length > 0) {
+        const freshCk = await createChatKey(chatId, recoveryMembers);
+        console.info(`[keystore] getCK: unwrap-fail recovery succeeded for ${chatId}`);
+        return freshCk;
+      }
+    }
+    throw new Error(`[keystore] getCK: cannot unwrap or re-derive CK for ${chatId}`);
   }, [orchestratorMode, unwrapCK, createChatKey]);
 
   // ---------- Exposed: encrypt ----------

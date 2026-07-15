@@ -27,7 +27,7 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const { send, status, subscribe } = useWs();
-  const { encrypt, ready: keystoreReady, keyLossAckRequired } = useKeystore();
+  const { encrypt, ready: keystoreReady, keyLossAckRequired, pubkeyReady } = useKeystore();
   const { memberId } = useAuth();
   const appendMessage = useHotboxStore((s) => s.appendMessage);
   const reconcilePending = useHotboxStore((s) => s.reconcilePending);
@@ -37,7 +37,7 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
   const isTypingRef = useRef(false);
   const pendingRef = useRef<Map<string, HotboxMessage>>(new Map());
 
-  const isDisabled = disabled || !keystoreReady || keyLossAckRequired || sending;
+  const isDisabled = disabled || !keystoreReady || !pubkeyReady || keyLossAckRequired || sending;
 
   // Reconcile optimistic messages on msg.ack
   useEffect(() => {
@@ -163,6 +163,7 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
   const placeholder =
     keyLossAckRequired  ? 'Acknowledge the key-loss warning above to start messaging' :
     !keystoreReady      ? 'Keystore initialising…' :
+    !pubkeyReady        ? 'Registering identity…' :
     status !== 'open'   ? `#${channelId} (sending via HTTP…)` :
     `Message #${channelId}`;
 
