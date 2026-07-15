@@ -178,6 +178,7 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
       >
         <textarea
           ref={textareaRef}
+          data-testid="composer-input"
           rows={1}
           className="flex-1 resize-none bg-transparent outline-none text-sm text-[var(--hotbox-text)] placeholder:text-[var(--hotbox-text-dim)] max-h-40 overflow-y-auto hotbox-scrollbar"
           placeholder={placeholder}

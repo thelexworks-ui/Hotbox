@@ -195,8 +195,6 @@ export function ChannelView({ channelId, isDm }: Props) {
     }));
     return () => {
       unsubs.forEach((u) => u());
-      send({ type: 'channel.leave', channel_id: channelId });
-      setMemberCount((n) => Math.max(0, n - 1));
     };
   }, [channelId, status, send, subscribe]);
 
