@@ -1,10 +1,23 @@
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
-import type { AegisEnvelope, HotboxMessage } from './types';
+import type { AegisEnvelope, AnyMessage, HotboxMessage, SystemMessage } from './types';
 
-const INSTANCE_ID = process.env.CTX_INSTANCE_ID ?? 'default';
+// ── Singleton client ──────────────────────────────────────────────────────────
+
+function buildClient(): SupabaseClient {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_ANON_KEY;
+  if (!url || !key) throw new Error('[hotbox-channels] NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not configured');
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
+let _client: SupabaseClient | null = null;
+function db(): SupabaseClient {
+  if (!_client) _client = buildClient();
+  return _client;
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 export type ChannelType = 'system' | 'agent' | 'topic' | 'dm';
 export type AgentRole = 'orchestrator' | 'analyst' | 'agent';
@@ -33,78 +46,109 @@ export interface CreateChannelParams {
   topic?: string;
 }
 
-function hotboxRoot(org: string): string {
-  return path.join(os.homedir(), '.cortextos', INSTANCE_ID, 'orgs', org, 'hotbox');
+// ── Row → ChannelMeta ─────────────────────────────────────────────────────────
+
+function rowToMeta(row: {
+  id: string; org_id: string; name: string; type: string;
+  pinned: boolean; topic?: string | null; created_at: string;
+}): ChannelMeta {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type as ChannelType,
+    org: row.org_id,
+    pinned: row.pinned,
+    created_at: row.created_at,
+    topic: row.topic ?? undefined,
+    members: [],
+  };
 }
 
-function channelDir(org: string, channelId: string): string {
-  return path.join(hotboxRoot(org), 'channels', channelId);
-}
+// ── Channel ops ───────────────────────────────────────────────────────────────
 
-function metaPath(org: string, channelId: string): string {
-  return path.join(channelDir(org, channelId), 'meta.json');
-}
+export async function listChannels(org: string): Promise<ChannelMeta[]> {
+  const { data, error } = await db()
+    .from('hotbox_channels')
+    .select('*')
+    .eq('org_id', org)
+    .order('pinned', { ascending: false })
+    .order('created_at', { ascending: true });
 
-function cursorPath(org: string): string {
-  return path.join(hotboxRoot(org), 'hooks-cursor.json');
-}
-
-function writeAtomic(filePath: string, data: unknown): void {
-  const tmp = `${filePath}.${crypto.randomBytes(4).toString('hex')}.tmp`;
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', 'utf8');
-  fs.renameSync(tmp, filePath);
-}
-
-export function channelExists(org: string, channelId: string): boolean {
-  return fs.existsSync(metaPath(org, channelId));
-}
-
-export function getChannelMeta(org: string, channelId: string): ChannelMeta | null {
-  const mp = metaPath(org, channelId);
-  if (!fs.existsSync(mp)) return null;
-  try { return JSON.parse(fs.readFileSync(mp, 'utf8')) as ChannelMeta; } catch { return null; }
-}
-
-export function createChannel(params: CreateChannelParams): ChannelMeta | null {
-  const channelId = params.name.replace(/^#/, '');
-  const mp = metaPath(params.org, channelId);
-
-  if (fs.existsSync(mp)) {
-    try { return JSON.parse(fs.readFileSync(mp, 'utf8')) as ChannelMeta; } catch { return null; }
+  if (error) {
+    console.error('[hotbox-channels] ERROR listing channels', { org, message: error.message, code: error.code });
+    return [];
   }
+  return (data ?? []).map(rowToMeta);
+}
 
-  const meta: ChannelMeta = {
+export async function getChannelMeta(org: string, channelId: string): Promise<ChannelMeta | null> {
+  const { data, error } = await db()
+    .from('hotbox_channels')
+    .select('*')
+    .eq('org_id', org)
+    .eq('id', channelId)
+    .single();
+
+  if (error) {
+    if (error.code !== 'PGRST116') {
+      console.error('[hotbox-channels] ERROR getting channel meta', { org, channelId, message: error.message });
+    }
+    return null;
+  }
+  return data ? rowToMeta(data as Parameters<typeof rowToMeta>[0]) : null;
+}
+
+export async function channelExists(org: string, channelId: string): Promise<boolean> {
+  return (await getChannelMeta(org, channelId)) !== null;
+}
+
+export async function createChannel(params: CreateChannelParams): Promise<ChannelMeta | null> {
+  const channelId = params.name.replace(/^#/, '');
+
+  const existing = await getChannelMeta(params.org, channelId);
+  if (existing) return existing;
+
+  const row = {
     id: channelId,
+    org_id: params.org,
     name: `#${channelId}`,
     type: params.type,
-    org: params.org,
-    agent_name: params.agentName,
-    agent_role: params.agentRole,
     pinned: params.pinned ?? false,
+    topic: params.topic ?? null,
     created_at: new Date().toISOString(),
-    topic: params.topic,
-    members: params.members ?? [],
   };
 
-  fs.mkdirSync(path.join(channelDir(params.org, channelId), 'messages'), { recursive: true });
-  writeAtomic(mp, meta);
-  appendSystemMessage(params.org, channelId, `${meta.name} channel created`);
-  return meta;
-}
+  const { data, error } = await db()
+    .from('hotbox_channels')
+    .insert(row)
+    .select()
+    .single();
 
-export function bootstrapWorkspace(org: string): void {
-  createChannel({ org, name: 'general', type: 'system', pinned: true, topic: 'General discussion', members: [] });
-  createChannel({ org, name: 'alerts',  type: 'system', pinned: true, topic: 'System alerts, watchdog events, cron notifications', members: [] });
-
-  const wsMeta = path.join(hotboxRoot(org), 'workspaces', 'meta.json');
-  if (!fs.existsSync(wsMeta)) {
-    writeAtomic(wsMeta, { org, name: org, created_at: new Date().toISOString() });
+  if (error) {
+    if (error.code === '23505') {
+      // Race: created between our check and insert
+      return getChannelMeta(params.org, channelId);
+    }
+    console.error('[hotbox-channels] ERROR creating channel', { org: params.org, channelId, message: error.message });
+    return null;
   }
+
+  if (data) {
+    void appendSystemMessage(params.org, channelId, `#${channelId} channel created`);
+  }
+
+  return data ? rowToMeta(data as Parameters<typeof rowToMeta>[0]) : null;
 }
 
-export function createAgentChannel(params: { org: string; agentName: string; agentRole?: AgentRole }): ChannelMeta | null {
-  bootstrapWorkspace(params.org);
+export async function bootstrapWorkspace(org: string): Promise<void> {
+  await Promise.all([
+    createChannel({ org, name: 'general', type: 'system', pinned: true, topic: 'General discussion', members: [] }),
+    createChannel({ org, name: 'alerts', type: 'system', pinned: true, topic: 'System alerts, watchdog events, cron notifications', members: [] }),
+  ]);
+}
+
+export async function createAgentChannel(params: { org: string; agentName: string; agentRole?: AgentRole }): Promise<ChannelMeta | null> {
+  await bootstrapWorkspace(params.org);
   return createChannel({
     org: params.org,
     name: `agent-${params.agentName}`,
@@ -117,67 +161,32 @@ export function createAgentChannel(params: { org: string; agentName: string; age
   });
 }
 
-export function listChannels(org: string): ChannelMeta[] {
-  const channelsDir = path.join(hotboxRoot(org), 'channels');
-  if (!fs.existsSync(channelsDir)) return [];
+// ── Message ops ───────────────────────────────────────────────────────────────
 
-  const channels: ChannelMeta[] = [];
-  for (const entry of fs.readdirSync(channelsDir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const mp = path.join(channelsDir, entry.name, 'meta.json');
-    if (!fs.existsSync(mp)) continue;
-    try { channels.push(JSON.parse(fs.readFileSync(mp, 'utf8'))); } catch { /* skip corrupt */ }
+export async function listMessages(org: string, channelId: string, limit = 100): Promise<AnyMessage[]> {
+  const { data, error } = await db()
+    .from('hotbox_messages')
+    .select('payload')
+    .eq('org_id', org)
+    .eq('channel_id', channelId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('[hotbox-channels] ERROR listing messages', { org, channelId, message: error.message });
+    return [];
   }
 
-  return channels.sort((a, b) => {
-    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-    return a.created_at.localeCompare(b.created_at);
-  });
+  return (data ?? []).map((r: { payload: AnyMessage }) => r.payload).reverse();
 }
 
-export function readMessages(org: string, channelId: string, limit = 100): unknown[] {
-  const messagesDir = path.join(channelDir(org, channelId), 'messages');
-  if (!fs.existsSync(messagesDir)) return [];
+export const readMessages = listMessages;
 
-  const files = fs.readdirSync(messagesDir)
-    .filter((f) => f.endsWith('.jsonl'))
-    .sort()
-    .reverse()
-    .slice(0, 7); // last 7 days max
-
-  const msgs: unknown[] = [];
-  for (const f of files.reverse()) {
-    const content = fs.readFileSync(path.join(messagesDir, f), 'utf8');
-    for (const line of content.split('\n').filter(Boolean)) {
-      try { msgs.push(JSON.parse(line)); } catch { /* skip */ }
-    }
-  }
-  return msgs.slice(-limit);
-}
-
-export function appendSystemMessage(org: string, channelId: string, text: string): void {
-  const today = new Date().toISOString().slice(0, 10);
-  const logPath = path.join(channelDir(org, channelId), 'messages', `${today}.jsonl`);
-  const msg = JSON.stringify({
-    id: `${Date.now()}-system-${crypto.randomBytes(3).toString('hex')}`,
-    org_id: org,
-    channel_id: channelId,
-    sender_id: 'system',
-    content: text,
-    type: 'system',
-    ts: new Date().toISOString(),
-  });
-  fs.mkdirSync(path.dirname(logPath), { recursive: true });
-  fs.appendFileSync(logPath, msg + '\n', 'utf8');
-}
-
-export function appendMessage(
+export async function appendMessage(
   org: string,
   channelId: string,
   params: { senderId: string; envelope: AegisEnvelope; threadParentId?: string },
-): HotboxMessage {
-  const today = new Date().toISOString().slice(0, 10);
-  const logPath = path.join(channelDir(org, channelId), 'messages', `${today}.jsonl`);
+): Promise<HotboxMessage> {
   const id = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   const msg: HotboxMessage = {
     id,
@@ -190,46 +199,36 @@ export function appendMessage(
     ts: new Date().toISOString(),
     ...(params.threadParentId ? { thread_parent_id: params.threadParentId } : {}),
   };
-  fs.mkdirSync(path.dirname(logPath), { recursive: true });
-  fs.appendFileSync(logPath, JSON.stringify(msg) + '\n', 'utf8');
 
-  // Increment parent thread_count in-file when this is a reply
-  if (params.threadParentId) {
-    bumpThreadCount(org, channelId, params.threadParentId);
+  const { error } = await db()
+    .from('hotbox_messages')
+    .insert({ id, org_id: org, channel_id: channelId, payload: msg });
+
+  if (error) {
+    console.error('[hotbox-channels] ERROR appending message', { org, channelId, message: error.message, code: error.code });
+    throw error;
   }
 
   return msg;
 }
 
-function bumpThreadCount(org: string, channelId: string, parentId: string): void {
-  const messagesDir = path.join(channelDir(org, channelId), 'messages');
-  if (!fs.existsSync(messagesDir)) return;
-  for (const f of fs.readdirSync(messagesDir).filter((x) => x.endsWith('.jsonl'))) {
-    const fp = path.join(messagesDir, f);
-    const lines = fs.readFileSync(fp, 'utf8').split('\n').filter(Boolean);
-    let changed = false;
-    const updated = lines.map((line) => {
-      try {
-        const obj = JSON.parse(line) as { id?: string; thread_count?: number };
-        if (obj.id === parentId) { obj.thread_count = (obj.thread_count ?? 0) + 1; changed = true; return JSON.stringify(obj); }
-      } catch { /* skip */ }
-      return line;
-    });
-    if (changed) {
-      const tmp = `${fp}.${crypto.randomBytes(4).toString('hex')}.tmp`;
-      fs.writeFileSync(tmp, updated.join('\n') + '\n', 'utf8');
-      fs.renameSync(tmp, fp);
-      return;
-    }
+export async function appendSystemMessage(org: string, channelId: string, text: string): Promise<void> {
+  const id = `${Date.now()}-system-${crypto.randomBytes(3).toString('hex')}`;
+  const msg: SystemMessage = {
+    id,
+    org_id: org,
+    channel_id: channelId,
+    sender_id: 'system',
+    content: text,
+    type: 'system',
+    ts: new Date().toISOString(),
+  };
+
+  const { error } = await db()
+    .from('hotbox_messages')
+    .insert({ id, org_id: org, channel_id: channelId, payload: msg });
+
+  if (error) {
+    console.error('[hotbox-channels] ERROR appending system message', { org, channelId, message: error.message });
   }
-}
-
-export function readCursor(org: string): string | null {
-  const cp = cursorPath(org);
-  if (!fs.existsSync(cp)) return null;
-  try { return (JSON.parse(fs.readFileSync(cp, 'utf8')) as { last_seen_ts?: string }).last_seen_ts ?? null; } catch { return null; }
-}
-
-export function writeCursor(org: string, ts: string): void {
-  writeAtomic(cursorPath(org), { last_seen_ts: ts, updated_at: new Date().toISOString() });
 }

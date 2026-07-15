@@ -15,12 +15,11 @@ export async function GET(req: NextRequest, { params }: { params: { channelId: s
   const limit = Number(req.nextUrl.searchParams.get('limit') ?? 100);
   const threadParentId = req.nextUrl.searchParams.get('thread') ?? undefined;
 
-  const msgs = readMessages(org, params.channelId, limit) as AnyMessage[];
+  const msgs = await readMessages(org, params.channelId, limit);
 
   if (threadParentId) {
     return NextResponse.json(msgs.filter((m) => isChatMsg(m) && m.thread_parent_id === threadParentId));
   }
-  // Top-level messages only (no thread replies in main feed); system messages always pass through
   return NextResponse.json(msgs.filter((m) => !isChatMsg(m) || !m.thread_parent_id));
 }
 
@@ -33,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: { channelId: 
     return NextResponse.json({ error: 'crypto_envelope and sender_id required' }, { status: 400 });
   }
 
-  const msg = appendMessage(org, params.channelId, {
+  const msg = await appendMessage(org, params.channelId, {
     senderId: sender_id,
     envelope: crypto_envelope,
     threadParentId: thread_parent_id,

@@ -257,11 +257,11 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
       if (!seen.has(id)) { seen.add(id); allMembers.push(id); }
     }
 
-    for (const targetMemberId of allMembers) {
+    await Promise.all(allMembers.map(async (targetMemberId) => {
       const res = await fetch(`/api/hotbox/keys?member=${encodeURIComponent(targetMemberId)}`);
       if (!res.ok) {
         console.warn(`[keystore] createChatKey: no pubkey for ${targetMemberId} — skipping`);
-        continue;
+        return;
       }
       const { publicKey: pubKeyB64 } = await res.json() as { publicKey: string };
 
@@ -299,7 +299,7 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
           wiv: bytesToB64(wrapIv),
         }),
       });
-    }
+    }));
 
     // ck is extractable; export raw bytes for IDB (Safari compat).
     const ckBytes = await crypto.subtle.exportKey('raw', ck);
