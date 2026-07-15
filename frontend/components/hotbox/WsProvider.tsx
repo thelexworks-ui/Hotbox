@@ -77,12 +77,16 @@ export function WsProvider({ children }: { children: React.ReactNode }) {
             // channels and subscribed_channels is empty at this point in the handshake.
             if (msg.type === 'hello') {
               attemptRef.current = 0;
-              setStatus('open');
+              const helloTs = new Date().toISOString();
               const lastId = sessionStorage.getItem(CURSOR_ID_KEY);
               const lastTs = sessionStorage.getItem(CURSOR_TS_KEY);
-              if (lastId || lastTs) {
-                pendingReplayRef.current = lastId ? { after_id: lastId } : { since: lastTs! };
-              }
+              // Always stage replay — fresh sessions (no cursor) use helloTs so messages
+              // that arrive in the channel.join gap (channels API fetch after hello) are
+              // recovered. Sessions with a cursor replay from their last seen message.
+              pendingReplayRef.current = lastId
+                ? { after_id: lastId }
+                : { since: lastTs ?? helloTs };
+              setStatus('open');
               dispatch(msg);
               return;
             }

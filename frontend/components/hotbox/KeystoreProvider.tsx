@@ -328,32 +328,11 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
 
     const res = await fetch(`/api/hotbox/keys?chat=${encodeURIComponent(chatId)}&member=${encodeURIComponent(activeMemberId)}`);
     if (!res.ok) {
-      if (res.status === 404) {
-        // No wrapped bundle for this member — enumerate all registered org members and
-        // distribute a new CK so every member can decrypt cross-session.
-        try {
-          const membersRes = await fetch(`/api/hotbox/keys?type=members&org=${encodeURIComponent(ORG)}`);
-          if (membersRes.ok) {
-            const { members } = await membersRes.json() as { members: string[] };
-            if (members.length > 0) {
-              await createChatKey(chatId, members);
-              const ck2 = await (db as IDBPDatabase<HotboxDBSchema>).get('chat-keys', chatId);
-              if (ck2) {
-                return crypto.subtle.importKey('raw', ck2.ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
-              }
-            }
-          }
-        } catch (err) {
-          console.warn('[keystore] getCK: member-enumeration fallback failed', err);
-        }
-      }
-      // Final fallback: local-only key (single-user, not cross-session readable).
-      console.warn(`[keystore] no wrapped bundle for ${activeMemberId} in ${chatId} (${res.status}) — generating local channel key`);
-      const rawCk = crypto.getRandomValues(new Uint8Array(32));
-      const ck = await crypto.subtle.importKey('raw', rawCk, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
-      const ckBytes = await crypto.subtle.exportKey('raw', ck);
-      await (db as IDBPDatabase<HotboxDBSchema>).put('chat-keys', { id: chatId, ckBytes, cached_at: new Date().toISOString() });
-      return crypto.subtle.importKey('raw', ckBytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+      // Hard-fail — do NOT auto-rotate the CK. Silently generating a new CK here
+      // overwrites all existing member bundles and makes every prior message permanently
+      // undecryptable. Missing wraps must be fixed via explicit createChatKey (channel-create
+      // or member-add), not auto-triggered by a 404 on decrypt.
+      throw new Error(`[keystore] no wrapped bundle for ${activeMemberId} in ${chatId} (${res.status})`);
     }
     const bundle = await res.json() as WrappedKeyBundle;
 
