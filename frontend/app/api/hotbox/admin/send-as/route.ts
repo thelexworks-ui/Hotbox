@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
   // Auto-create channel if needed (idempotent — handles DM channels not yet in hotbox_channels)
   if (!(await channelExists(org, channel))) {
     const type = channel.startsWith('dm-') ? 'dm' : 'topic';
-    await createChannel(org, channel, channel, type).catch(() => {/* race — already exists */});
+    await createChannel({ org, name: channel, type }).catch(() => {/* race — already exists */});
   }
 
   // Load wrapped bundle for sender in this channel
