@@ -1,10 +1,11 @@
 'use client';
 
 import React from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { KeyRotationWatcher } from './KeyRotationWatcher';
 import { KeyLossWarningModal } from './KeyLossWarningModal';
+import { NotificationsProvider } from './NotificationsProvider';
 import { useWs } from './WsProvider';
 import { useKeystore } from './KeystoreProvider';
 
@@ -68,9 +69,10 @@ const TABS: TabItem[] = [
 
 function MobileTabBar({ onOpenDrawer }: { onOpenDrawer(): void }) {
   const pathname = usePathname();
+  const router   = useRouter();
 
   const handleTab = (action: TabItem['action']) => {
-    // All tabs currently open the drawer — future tabs can deep-link
+    if (action === 'dms') { router.push('/dm'); return; }
     onOpenDrawer();
   };
 
@@ -123,6 +125,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-col h-screen">
       <KeyRotationWatcher />
+      <NotificationsProvider />
       <WsStatusBar />
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Desktop sidebar */}
