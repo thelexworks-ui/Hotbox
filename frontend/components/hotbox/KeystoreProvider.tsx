@@ -54,7 +54,7 @@ async function attemptPubkeyRegistration(memberId: string, pubKeyRaw: ArrayBuffe
 }
 
 async function openHotboxDB(org: string): Promise<IDBPDatabase> {
-  return openDB(`hotbox-${org}`, 4, {
+  return openDB(`hotbox-${org}`, 5, {
     upgrade(db, oldVersion) {
       if (oldVersion < 2) {
         // v0/v1→v2: initial schema or first-ever install.
@@ -67,6 +67,13 @@ async function openHotboxDB(org: string): Promise<IDBPDatabase> {
         // v2/v3→v4: evict chat-keys only — clears local-fallback keys written when
         // /api/hotbox/keys returned 404 (pre-Supabase migration). keypairs are X25519
         // identity keys — never evict.
+        if (db.objectStoreNames.contains("chat-keys")) db.deleteObjectStore("chat-keys");
+        db.createObjectStore("chat-keys", { keyPath: "id" });
+      }
+      if (oldVersion === 4) {
+        // v4→v5: evict stale chat-keys from CK divergence (getCK race before pubkey
+        // registration completed — getCK generated CK_A without Lex, Lex called
+        // createChatKey again and got CK_B; messages encrypted under different keys).
         if (db.objectStoreNames.contains("chat-keys")) db.deleteObjectStore("chat-keys");
         db.createObjectStore("chat-keys", { keyPath: "id" });
       }

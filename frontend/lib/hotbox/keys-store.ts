@@ -161,6 +161,36 @@ export async function loadWrappedBundle(
 
 // ── Member discovery ──────────────────────────────────────────────────────────
 
+export interface MemberDetail {
+  id: string;
+  name: string;
+  role: string;
+  pubkey: string;
+}
+
+export async function listAllMemberDetails(org: string): Promise<MemberDetail[]> {
+  const { data, error } = await db()
+    .from('hotbox_keys')
+    .select('key_path, payload')
+    .eq('org_id', org)
+    .eq('key_type', 'pubkey');
+
+  if (error) {
+    if (error.code !== 'PGRST116') {
+      console.error('[hotbox-keys] ERROR listing member details', { org, message: error.message });
+      throw error;
+    }
+    return [];
+  }
+
+  return (data ?? []).map((r: { key_path: string; payload: { public_key?: string; role?: string } | null }) => ({
+    id: r.key_path,
+    name: r.key_path,
+    role: r.payload?.role ?? 'user',
+    pubkey: r.payload?.public_key ?? '',
+  }));
+}
+
 export async function listRegisteredMembers(org: string): Promise<string[]> {
   const { data, error } = await db()
     .from('hotbox_keys')

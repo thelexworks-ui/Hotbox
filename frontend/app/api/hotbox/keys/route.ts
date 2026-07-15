@@ -8,6 +8,7 @@ import {
   loadWrappedBundle,
   listRegisteredMembers,
 } from '@/lib/hotbox/keys-store';
+import { validateMasterKey } from '@/lib/hotbox/master-key';
 
 export const runtime = 'nodejs';
 
@@ -101,14 +102,18 @@ export async function POST(req: NextRequest) {
   }
 
   // Public key registration: { memberId, publicKey, role? }
-  // Identity check: caller may only register their own pubkey.
+  // Master key bypasses identity check — allows server-side fleet registration.
+  // Without master key: caller may only register their own pubkey.
   if (body.memberId && body.publicKey) {
-    const requesterId = getRequestingMemberId();
-    if (body.memberId !== requesterId) {
-      console.warn('[hotbox-keys] pubkey registration rejected — memberId mismatch', {
-        attempted: body.memberId, actual: requesterId,
-      });
-      return NextResponse.json({ error: 'cannot register pubkey for another member' }, { status: 403 });
+    const masterRole = validateMasterKey(req.headers.get('x-master-key'));
+    if (!masterRole) {
+      const requesterId = getRequestingMemberId();
+      if (body.memberId !== requesterId) {
+        console.warn('[hotbox-keys] pubkey registration rejected — memberId mismatch', {
+          attempted: body.memberId, actual: requesterId,
+        });
+        return NextResponse.json({ error: 'cannot register pubkey for another member' }, { status: 403 });
+      }
     }
     try {
       await storePublicKey(org, body.memberId, body.publicKey, body.role);
