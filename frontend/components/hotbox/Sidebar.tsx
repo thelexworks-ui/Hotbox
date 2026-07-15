@@ -1,17 +1,41 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useHotboxStore, type ChannelMeta, type PresenceStatus } from '@/store/hotbox';
 import { useWs } from './WsProvider';
-import { useAgents } from '@/hooks/useMembers';
+import { useHeadmasters, useOrchestrators, useAgentsOnly, type Member } from '@/hooks/useMembers';
 import { ChannelCreateModal } from './ChannelCreateModal';
 import { MembersPanel, RoleBadge } from './MembersPanel';
 
 const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG ?? 'toadsage';
 const WORKSPACE_NAME = process.env.NEXT_PUBLIC_HOTBOX_WORKSPACE_NAME ?? ORG;
 const MAX_AGENTS_VISIBLE = 8;
+
+// ── Icons ────────────────────────────────────────────────────────────────────
+
+function IconMembers() {
+  return (
+    <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+      <circle cx="9" cy="7" r="4"/>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+  );
+}
+
+function IconRefresh({ spinning }: { spinning: boolean }) {
+  return (
+    <svg
+      width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
+      style={{ animation: spinning ? 'spin 0.6s linear' : undefined }}
+    >
+      <polyline points="23 4 23 10 17 10"/>
+      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+    </svg>
+  );
+}
 
 // ── PresenceDot ──────────────────────────────────────────────────────────────
 
@@ -25,6 +49,78 @@ function PresenceDot({ status, size = 8 }: { status: PresenceStatus; size?: numb
       className="inline-block rounded-full flex-shrink-0"
       style={{ width: size, height: size, background: color, animation: pulse ? 'pulse-dot 2s ease-in-out infinite' : undefined }}
     />
+  );
+}
+
+// ── MemberItem (shared by all 3 role sections) ───────────────────────────────
+
+function MemberItem({ member, status }: { member: Member; status: PresenceStatus }) {
+  const pathname = usePathname();
+  const href = `/dm/${member.id}`;
+  const active = pathname.includes(member.id);
+
+  return (
+    <Link
+      href={href}
+      title={`${member.name} · ${member.role}`}
+      className={[
+        'flex items-center gap-2.5 px-4 py-[3px] rounded mx-1',
+        active
+          ? 'bg-[var(--hotbox-surface-2)] text-[var(--hotbox-text)]'
+          : 'text-[var(--hotbox-text-muted)] hover:bg-[var(--hotbox-surface-2)] hover:text-[var(--hotbox-text)]',
+      ].join(' ')}
+    >
+      <PresenceDot status={status} size={7} />
+      <span className="flex-1 text-sm truncate">{member.name}</span>
+      {(member.role === 'orchestrator' || member.role === 'headmaster') && (
+        <RoleBadge role={member.role} />
+      )}
+    </Link>
+  );
+}
+
+// ── Role sections ────────────────────────────────────────────────────────────
+
+function RoleSection({
+  label,
+  members,
+  presence,
+  overflow,
+  onMore,
+}: {
+  label: string;
+  members: Member[];
+  presence: Record<string, PresenceStatus>;
+  overflow?: number;
+  onMore?: () => void;
+}) {
+  if (members.length === 0 && !overflow) return null;
+  return (
+    <div className="mb-1">
+      <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--hotbox-text-dim)]">
+        {label}
+      </div>
+      {members.length === 0 ? (
+        <div className="px-4 py-1 text-xs text-[var(--hotbox-text-dim)]">None connected.</div>
+      ) : (
+        members.map((m) => (
+          <MemberItem
+            key={m.id}
+            member={m}
+            status={(presence[m.id] ?? presence[m.name] ?? 'offline') as PresenceStatus}
+          />
+        ))
+      )}
+      {overflow != null && overflow > 0 && onMore && (
+        <button
+          onClick={onMore}
+          className="w-full text-left px-4 py-1 text-xs transition-opacity hover:opacity-75"
+          style={{ color: 'var(--hotbox-accent)' }}
+        >
+          +{overflow} more
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -43,7 +139,7 @@ function ChannelItem({ channel, onItemClick }: { channel: ChannelMeta; onItemCli
       href={href}
       onClick={onItemClick}
       className={[
-        'flex items-center gap-2 px-2 py-[3px] rounded mx-1 group',
+        'flex items-center gap-2 px-2 py-[3px] rounded mx-1',
         active
           ? 'bg-[var(--hotbox-surface-2)] text-[var(--hotbox-text)]'
           : 'text-[var(--hotbox-text-muted)] hover:bg-[var(--hotbox-surface)] hover:text-[var(--hotbox-text)]',
@@ -73,102 +169,39 @@ function ChannelGroup({ label, channels, onItemClick }: { label: string; channel
   );
 }
 
-// ── Agents section ───────────────────────────────────────────────────────────
-
-function AgentItem({ id, name, role, status }: { id: string; name: string; role: string; status: PresenceStatus }) {
-  const pathname = usePathname();
-  const href = `/dm/${id}`;
-  const active = pathname.includes(id);
-
-  return (
-    <Link
-      href={href}
-      title={`${name} · ${role}`}
-      className={[
-        'flex items-center gap-2.5 px-4 py-[3px] rounded mx-1',
-        active
-          ? 'bg-[var(--hotbox-surface-2)] text-[var(--hotbox-text)]'
-          : 'text-[var(--hotbox-text-muted)] hover:bg-[var(--hotbox-surface-2)] hover:text-[var(--hotbox-text)]',
-      ].join(' ')}
-    >
-      <PresenceDot status={status} size={7} />
-      <span className="flex-1 text-sm truncate">{name}</span>
-      {(role === 'orchestrator' || role === 'headmaster') && (
-        <RoleBadge role={role as 'orchestrator' | 'headmaster'} />
-      )}
-    </Link>
-  );
-}
-
-function AgentsSection({ onOpenMembers }: { onOpenMembers(filter: 'agent'): void }) {
-  const agents = useAgents(15_000);
-  const presence = useHotboxStore((s) => s.presence);
-
-  const sorted = [...agents].sort((a, b) => {
-    const sa = (presence[a.id] ?? presence[a.name] ?? 'offline') as PresenceStatus;
-    const sb = (presence[b.id] ?? presence[b.name] ?? 'offline') as PresenceStatus;
-    const aOnline = sa !== 'offline';
-    const bOnline = sb !== 'offline';
-    if (aOnline !== bOnline) return aOnline ? -1 : 1;
-    const aTop = a.role === 'orchestrator' || a.role === 'headmaster';
-    const bTop = b.role === 'orchestrator' || b.role === 'headmaster';
-    if (aTop !== bTop) return aTop ? -1 : 1;
-    return a.name.localeCompare(b.name);
-  });
-
-  const visible = sorted.slice(0, MAX_AGENTS_VISIBLE);
-  const overflow = sorted.length - MAX_AGENTS_VISIBLE;
-
-  return (
-    <div className="mb-1">
-      <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--hotbox-text-dim)]">Agents</div>
-      {agents.length === 0 ? (
-        <div className="px-4 py-2 text-xs text-[var(--hotbox-text-dim)]">No agents connected yet.</div>
-      ) : (
-        <>
-          {visible.map((agent) => (
-            <AgentItem
-              key={agent.id}
-              id={agent.id}
-              name={agent.name}
-              role={agent.role}
-              status={(presence[agent.id] ?? presence[agent.name] ?? 'offline') as PresenceStatus}
-            />
-          ))}
-          {overflow > 0 && (
-            <button
-              onClick={() => onOpenMembers('agent')}
-              className="w-full text-left px-4 py-1 text-xs transition-opacity"
-              style={{ color: 'var(--hotbox-accent)' }}
-            >
-              +{overflow} more
-            </button>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
 // ── Sidebar ──────────────────────────────────────────────────────────────────
 
 export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
+  const router = useRouter();
   const channels     = useHotboxStore((s) => s.channels);
   const setChannels  = useHotboxStore((s) => s.setChannels);
   const appendChannel = useHotboxStore((s) => s.appendChannel);
   const setPresence  = useHotboxStore((s) => s.setPresence);
+  const presence     = useHotboxStore((s) => s.presence);
   const { subscribe } = useWs();
+
+  const headmasters   = useHeadmasters(30_000);
+  const orchestrators = useOrchestrators(30_000);
+  const agentsOnly    = useAgentsOnly(15_000);
 
   const [showCreate, setShowCreate]   = useState(false);
   const [showMembers, setShowMembers] = useState(false);
   const [membersFilter, setMembersFilter] = useState<'all' | 'user' | 'agent'>('all');
+  const [refreshing, setRefreshing]   = useState(false);
+  const [refreshKey, setRefreshKey]   = useState(0);
+
+  // CH3: refetch channels (also triggered by refreshKey for CH4)
+  const refetchChannels = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/hotbox/channels?org=${ORG}`);
+      const data = await res.json();
+      if (Array.isArray(data)) setChannels(data);
+    } catch {}
+  }, [setChannels]);
 
   useEffect(() => {
-    fetch(`/api/hotbox/channels?org=${ORG}`)
-      .then((r) => r.json())
-      .then((data) => { if (Array.isArray(data)) setChannels(data); })
-      .catch(() => {});
-  }, [setChannels]);
+    refetchChannels();
+  }, [refetchChannels, refreshKey]);
 
   useEffect(() => {
     fetch('/api/hotbox/presence')
@@ -179,7 +212,7 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
         }
       })
       .catch(() => {});
-  }, [setPresence]);
+  }, [setPresence, refreshKey]);
 
   useEffect(() => {
     const unsub1 = subscribe('channel.new', (msg) => {
@@ -193,15 +226,36 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
     return () => { unsub1(); unsub2(); };
   }, [subscribe, appendChannel, setPresence]);
 
-  const handleChannelCreated = (ch: ChannelMeta) => {
+  // CH3: append optimistic + re-fetch authoritative list
+  const handleChannelCreated = async (ch: ChannelMeta) => {
     appendChannel(ch);
     setShowCreate(false);
+    await refetchChannels();
+  };
+
+  // CH4: manual refresh
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshKey((k) => k + 1);
+    router.refresh();
+    setTimeout(() => setRefreshing(false), 700);
   };
 
   const handleOpenMembers = (filter: 'agent') => {
     setMembersFilter(filter);
     setShowMembers(true);
   };
+
+  // Agents: sort online-first, alpha within group; cap at MAX_AGENTS_VISIBLE
+  const sortedAgents = [...agentsOnly].sort((a, b) => {
+    const sa = (presence[a.id] ?? presence[a.name] ?? 'offline') as PresenceStatus;
+    const sb = (presence[b.id] ?? presence[b.name] ?? 'offline') as PresenceStatus;
+    if ((sa !== 'offline') !== (sb !== 'offline')) return sa !== 'offline' ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+  const visibleAgents = sortedAgents.slice(0, MAX_AGENTS_VISIBLE);
+  const agentOverflow = sortedAgents.length - MAX_AGENTS_VISIBLE;
 
   const system = channels.filter((c) => c.type === 'system');
   const topics = channels.filter((c) => c.type === 'topic');
@@ -231,20 +285,37 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
           <span data-testid="workspace-label" className="font-semibold text-sm text-[var(--hotbox-text)] truncate">
             {WORKSPACE_NAME}
           </span>
-          <button
-            onClick={() => setShowMembers(true)}
-            className="text-[var(--hotbox-text-dim)] hover:text-[var(--hotbox-text)] transition-colors"
-            title="Members"
-          >
-            <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-              <circle cx="9" cy="7" r="4"/>
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* CH4: Refresh button */}
+            <button
+              onClick={handleRefresh}
+              title="Refresh"
+              className="text-[var(--hotbox-text-dim)] hover:text-[var(--hotbox-text)] transition-colors"
+            >
+              <IconRefresh spinning={refreshing} />
+            </button>
+            {/* Members panel button */}
+            <button
+              onClick={() => setShowMembers(true)}
+              title="Members"
+              className="text-[var(--hotbox-text-dim)] hover:text-[var(--hotbox-text)] transition-colors"
+            >
+              <IconMembers />
+            </button>
+          </div>
         </div>
 
-        <AgentsSection onOpenMembers={handleOpenMembers} />
+        {/* CH1: 3-level hierarchy */}
+        <RoleSection label="Headmaster" members={headmasters} presence={presence} />
+        <RoleSection label="Orchestrator" members={orchestrators} presence={presence} />
+        <RoleSection
+          label="Agents"
+          members={visibleAgents}
+          presence={presence}
+          overflow={agentOverflow > 0 ? agentOverflow : undefined}
+          onMore={() => handleOpenMembers('agent')}
+        />
+
         <ChannelGroup label="Channels"        channels={[...system, ...topics]} onItemClick={onItemClick} />
         <ChannelGroup label="Direct Messages" channels={dms}                    onItemClick={onItemClick} />
 

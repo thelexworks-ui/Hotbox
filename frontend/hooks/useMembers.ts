@@ -9,8 +9,6 @@ export interface Member {
   pubkey: string;
 }
 
-const AGENT_ROLES: Member['role'][] = ['agent', 'orchestrator', 'headmaster'];
-
 async function fetchMembers(): Promise<Member[]> {
   const res = await fetch('/api/hotbox/members');
   if (!res.ok) return [];
@@ -33,7 +31,19 @@ export function useMembers(pollMs = 30_000) {
   return members;
 }
 
+export function useHeadmasters(pollMs = 30_000) {
+  return useMembers(pollMs).filter((m) => m.role === 'headmaster');
+}
+
+export function useOrchestrators(pollMs = 30_000) {
+  return useMembers(pollMs).filter((m) => m.role === 'orchestrator');
+}
+
+export function useAgentsOnly(pollMs = 15_000) {
+  return useMembers(pollMs).filter((m) => m.role === 'agent');
+}
+
+// Legacy: all non-user roles (headmaster + orchestrator + agent)
 export function useAgents(pollMs = 15_000) {
-  const members = useMembers(pollMs);
-  return members.filter((m) => AGENT_ROLES.includes(m.role));
+  return useMembers(pollMs).filter((m) => m.role !== 'user');
 }
