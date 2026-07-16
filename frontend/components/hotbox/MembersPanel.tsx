@@ -88,8 +88,8 @@ function MemberRow({ member, presence, expanded, onToggle }: MemberRowProps) {
       <button
         onClick={onToggle}
         className="w-full flex items-center gap-3 px-4 py-2.5 transition-colors duration-100 text-left"
-        style={{ background: expanded ? 'var(--hotbox-surface-2)' : undefined }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--hotbox-surface-2)'; }}
+        style={{ background: expanded ? 'var(--hotbox-surface-active)' : undefined }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--hotbox-surface-hover)'; }}
         onMouseLeave={e => { if (!expanded) (e.currentTarget as HTMLElement).style.background = ''; }}
       >
         <MemberAvatar member={member} />
@@ -113,7 +113,7 @@ function MemberRow({ member, presence, expanded, onToggle }: MemberRowProps) {
       {expanded && (
         <div
           className="px-4 pb-2 border-b"
-          style={{ background: 'rgba(0,0,0,0.15)', borderColor: 'var(--hotbox-border)' }}
+          style={{ background: 'var(--hotbox-bg-sunken)', borderColor: 'var(--hotbox-border)' }}
         >
           <div className="flex items-center gap-2 py-1.5">
             <span className="text-xs w-14 flex-shrink-0" style={{ color: 'var(--hotbox-text-dim)' }}>pubkey</span>
@@ -161,10 +161,11 @@ export function MembersPanel({ open, onClose, initialFilter = 'all' }: Props) {
         className="hidden md:flex flex-col fixed right-0 top-0 h-full z-40 border-l"
         style={{
           width: 280,
-          background: 'var(--hotbox-surface)',
-          borderColor: 'var(--hotbox-border)',
+          background: 'var(--hotbox-bg-raised)',
+          borderColor: 'var(--hotbox-border-strong)',
+          boxShadow: 'var(--hotbox-shadow-lg)',
           transform: open ? 'translateX(0)' : 'translateX(100%)',
-          transition: 'transform 200ms ease-out',
+          transition: `transform var(--duration-enter) var(--ease-out)`,
         }}
       >
         <PanelContent
@@ -191,8 +192,9 @@ export function MembersPanel({ open, onClose, initialFilter = 'all' }: Props) {
           <div
             className="flex flex-col rounded-t-xl border-t"
             style={{
-              background: 'var(--hotbox-surface)',
-              borderColor: 'var(--hotbox-border)',
+              background: 'var(--hotbox-bg-raised)',
+              borderColor: 'var(--hotbox-border-strong)',
+              boxShadow: 'var(--hotbox-shadow-lg)',
               maxHeight: '95vh',
             }}
             onClick={(e) => e.stopPropagation()}
@@ -252,7 +254,7 @@ function PanelContent({ onClose, search, setSearch, filter, setFilter, online, o
 
       {/* Search */}
       <div className="px-3 py-2 border-b flex-shrink-0" style={{ borderColor: 'var(--hotbox-border)' }}>
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border" style={{ background: 'var(--hotbox-surface-2)', borderColor: 'var(--hotbox-border)' }}>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border" style={{ background: 'var(--hotbox-bg-sunken)', borderColor: 'var(--hotbox-border)' }}>
           <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ color: 'var(--hotbox-text-dim)', flexShrink: 0 }}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input
             type="text"
@@ -278,7 +280,7 @@ function PanelContent({ onClose, search, setSearch, filter, setFilter, online, o
             onClick={() => setFilter(f.value)}
             className="flex-1 text-xs font-medium py-1 rounded transition-colors duration-100"
             style={{
-              background: filter === f.value ? 'var(--hotbox-surface-2)' : undefined,
+              background: filter === f.value ? 'var(--hotbox-selected)' : undefined,
               color: filter === f.value ? 'var(--hotbox-accent)' : 'var(--hotbox-text-dim)',
             }}
           >
@@ -299,7 +301,7 @@ function PanelContent({ onClose, search, setSearch, filter, setFilter, online, o
 
         {online.length > 0 && (
           <>
-            <div className="px-4 py-1 sticky top-0" style={{ background: 'var(--hotbox-surface)' }}>
+            <div className="px-4 py-1 sticky top-0" style={{ background: 'var(--hotbox-bg-raised)' }}>
               <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--hotbox-text-dim)' }}>
                 Online — {online.length}
               </span>
@@ -318,7 +320,7 @@ function PanelContent({ onClose, search, setSearch, filter, setFilter, online, o
 
         {offline.length > 0 && (
           <>
-            <div className="px-4 py-1 sticky top-0" style={{ background: 'var(--hotbox-surface)' }}>
+            <div className="px-4 py-1 sticky top-0" style={{ background: 'var(--hotbox-bg-raised)' }}>
               <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--hotbox-text-dim)' }}>
                 Offline — {offline.length}
               </span>
