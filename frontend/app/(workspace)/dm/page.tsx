@@ -22,12 +22,16 @@ function PresenceDot({ status }: { status: PresenceStatus }) {
 
 function RolePill({ role }: { role: Member['role'] }) {
   if (role === 'headmaster') return (
-    <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded"
-      style={{ background: 'var(--hotbox-mention)', color: '#fff' }}>HM</span>
+    <span
+      className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+      style={{ background: 'rgba(255,215,0,0.14)', color: '#FFD700', fontFamily: "'JetBrains Mono', monospace" }}
+    >HM</span>
   );
   if (role === 'orchestrator') return (
-    <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded"
-      style={{ background: 'var(--hotbox-accent)', color: '#fff' }}>ORC</span>
+    <span
+      className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+      style={{ background: 'var(--hotbox-accent-subtle)', color: 'var(--hotbox-accent)', fontFamily: "'JetBrains Mono', monospace" }}
+    >ORC</span>
   );
   return null;
 }
