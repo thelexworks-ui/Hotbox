@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const PUBLIC_API_PREFIXES = [
   '/api/hotbox/login',
   '/api/hotbox/admin/',
+  '/api/hotbox/internal/', // agent-to-server calls; each handler verifies Bearer JWT
 ];
 
 export function middleware(req: NextRequest) {
