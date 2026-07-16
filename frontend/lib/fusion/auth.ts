@@ -11,10 +11,13 @@ export interface JwtPayload {
   sub: string;   // user id
   org: string;   // org id
   role: string;
+  member_id?: string; // slug used as sender_id in Hotbox (e.g. "lex")
 }
 
 export async function signAccessToken(payload: JwtPayload): Promise<string> {
-  return new SignJWT({ org: payload.org, role: payload.role })
+  const claims: Record<string, string> = { org: payload.org, role: payload.role };
+  if (payload.member_id) claims['member_id'] = payload.member_id;
+  return new SignJWT(claims)
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(payload.sub)
     .setIssuedAt()
@@ -28,6 +31,7 @@ export async function verifyAccessToken(token: string): Promise<JwtPayload> {
     sub: payload.sub as string,
     org: payload['org'] as string,
     role: payload['role'] as string,
+    member_id: payload['member_id'] as string | undefined,
   };
 }
 
