@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import type { AegisEnvelope, AnyMessage, HotboxMessage, SystemMessage } from './types';
-import { storeChannelKey, storeChannelMembers, getChannelMembers } from './keys-store';
+import { storeChannelKey, storeChannelMembers, getChannelMembers, hasChannelKey } from './keys-store';
 
 // ── Singleton client ──────────────────────────────────────────────────────────
 
@@ -107,7 +107,20 @@ export async function createChannel(params: CreateChannelParams): Promise<Channe
   const channelId = params.name.replace(/^#/, '');
 
   const existing = await getChannelMeta(params.org, channelId);
-  if (existing) return existing;
+  if (existing) {
+    // Top up members and CK if a prior racey createChannel left them missing.
+    const [currentMembers, hasCk] = await Promise.all([
+      getChannelMembers(params.org, channelId),
+      hasChannelKey(params.org, channelId),
+    ]);
+    if (params.members && params.members.length > 0 && currentMembers.length === 0) {
+      await storeChannelMembers(params.org, channelId, params.members);
+    }
+    if (!hasCk) {
+      await storeChannelKey(params.org, channelId, crypto.randomBytes(32).toString('base64'));
+    }
+    return existing;
+  }
 
   const row = {
     id: channelId,
@@ -136,12 +149,9 @@ export async function createChannel(params: CreateChannelParams): Promise<Channe
 
   if (data) {
     void appendSystemMessage(params.org, channelId, `#${channelId} channel created`);
-    // Generate server-held AES-GCM-256 CK for the new channel. Fire-and-forget is
-    // intentional — channel row exists regardless; getCK on first send will hard-fail
-    // with a 404 if this write loses a race, surfacing the error to the user.
-    void storeChannelKey(params.org, channelId, crypto.randomBytes(32).toString('base64'));
+    await storeChannelKey(params.org, channelId, crypto.randomBytes(32).toString('base64'));
     if (params.members && params.members.length > 0) {
-      void storeChannelMembers(params.org, channelId, params.members);
+      await storeChannelMembers(params.org, channelId, params.members);
     }
   }
 

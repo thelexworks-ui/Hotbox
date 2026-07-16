@@ -117,6 +117,17 @@ export async function addMemberToGeneral(org: string, memberId: string): Promise
   await storeChannelMembers(org, 'general', [...current, memberId]);
 }
 
+export async function hasChannelKey(org: string, channelId: string): Promise<boolean> {
+  const { data } = await db()
+    .from('hotbox_keys')
+    .select('key_path')
+    .eq('org_id', org)
+    .eq('key_type', 'ck')
+    .eq('key_path', channelId)
+    .maybeSingle();
+  return data !== null;
+}
+
 export async function loadChannelKey(org: string, channelId: string): Promise<string | null> {
   const { data, error } = await db()
     .from('hotbox_keys')
