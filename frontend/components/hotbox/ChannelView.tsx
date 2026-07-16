@@ -67,7 +67,7 @@ function MessageRow({ msg }: { msg: AnyMessage }) {
   const threadCount = isHotboxMsg(msg) ? (msg.thread_count ?? 0) : 0;
 
   return (
-    <div className={['px-4 py-1 hover:bg-[var(--hotbox-surface-2)] group rounded', isPending ? 'opacity-60' : ''].join(' ')}>
+    <div className={['px-4 py-1 hover:bg-[var(--hotbox-surface-hover)] group rounded transition-colors hotbox-msg-in', isPending ? 'opacity-60' : ''].join(' ')}>
       <div className="flex items-baseline gap-2 mb-0.5">
         <span className="font-semibold text-sm text-[var(--hotbox-text)]">{msg.sender_id}</span>
         <span className="text-[11px] text-[var(--hotbox-text-dim)]">{formatTime(msg.ts)}</span>
@@ -220,7 +220,7 @@ export function ChannelView({ channelId, isDm }: Props) {
     <div className="flex flex-col h-full" style={{ background: 'var(--hotbox-bg)' }}>
       {/* Header */}
       <div
-        className="flex items-center gap-3 px-4 py-3 border-b border-[var(--hotbox-border)] flex-shrink-0"
+        className="flex items-center gap-3 px-4 py-3 border-b border-[var(--hotbox-border-strong)] flex-shrink-0"
         style={{ background: 'var(--hotbox-bg)' }}
       >
         <span className="font-semibold text-sm text-[var(--hotbox-text)]">

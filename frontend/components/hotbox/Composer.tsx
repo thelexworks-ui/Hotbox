@@ -168,10 +168,11 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
     <div className="px-4 pb-4">
       <div
         className={[
-          'flex items-end gap-2 rounded-lg px-3 py-2',
-          'border border-[var(--hotbox-border)] bg-[var(--hotbox-surface-2)]',
+          'flex items-end gap-2 rounded-xl px-3 py-2',
+          'border border-[var(--hotbox-border)] bg-[var(--hotbox-bg-sunken)]',
           isDisabled ? 'opacity-60' : '',
         ].join(' ')}
+        style={!isDisabled ? { transition: `border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out)` } : undefined}
       >
         <textarea
           ref={textareaRef}
@@ -197,11 +198,16 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
         />
         <button
           className={[
-            'flex-shrink-0 rounded px-2.5 py-1 text-sm font-medium',
+            'flex-shrink-0 rounded-lg px-2.5 py-1.5 text-sm font-semibold transition-all',
             text.trim() && !isDisabled
-              ? 'bg-[var(--hotbox-accent)] text-white hover:bg-[var(--hotbox-accent-hover)]'
+              ? 'bg-[var(--hotbox-accent)] text-white'
               : 'bg-[var(--hotbox-border)] text-[var(--hotbox-text-dim)] cursor-not-allowed',
           ].join(' ')}
+          style={text.trim() && !isDisabled ? {
+            transition: `background var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out)`,
+          } : undefined}
+          onMouseEnter={(e) => { if (text.trim() && !isDisabled) (e.currentTarget as HTMLButtonElement).style.boxShadow = 'var(--hotbox-accent-glow)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = ''; }}
           onClick={handleSend}
           disabled={!text.trim() || isDisabled}
         >
