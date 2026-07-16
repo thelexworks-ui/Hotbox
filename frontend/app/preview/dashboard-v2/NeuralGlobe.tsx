@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { EffectComposer, Bloom, ChromaticAberration, Vignette } from '@react-three/postprocessing';
 import * as THREE from 'three';
@@ -37,6 +37,11 @@ interface AgentData {
   id: string;
   name: string;
   state: NodeState;
+  role?: string;
+  skills?: string[];
+  channels?: string[];
+  taskCount?: number;
+  lastActiveMsAgo?: number | null;
 }
 
 // â”€â”€ Icosphere helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -379,25 +384,34 @@ function CommandChainEdges({ agentPositions }: { agentPositions: THREE.Vector3[]
 }
 
 function AgentNodeMesh({
-  position, agent, animate, flashing, onSelect,
+  position, agent, animate, flashing, onSelect, hitMeshRef, onPointerEnter, onPointerLeave,
 }: {
   position: THREE.Vector3;
   agent: AgentData;
   animate: boolean;
   flashing: boolean;
   onSelect?: (sx: number, sy: number) => void;
+  hitMeshRef?: (el: THREE.Mesh | null) => void;
+  onPointerEnter?: () => void;
+  onPointerLeave?: () => void;
 }) {
   const coreRef  = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
   const { camera, size } = useThree();
 
+  const projectToScreen = useCallback((): [number, number] => {
+    const projected = position.clone().project(camera);
+    return [
+      (projected.x * 0.5 + 0.5) * size.width,
+      (-(projected.y * 0.5) + 0.5) * size.height,
+    ];
+  }, [position, camera, size]);
+
   const handleSelect = useCallback(() => {
     if (!onSelect) return;
-    const projected = position.clone().project(camera);
-    const sx = (projected.x * 0.5 + 0.5) * size.width;
-    const sy = (-(projected.y * 0.5) + 0.5) * size.height;
+    const [sx, sy] = projectToScreen();
     onSelect(sx, sy);
-  }, [position, camera, size, onSelect]);
+  }, [projectToScreen, onSelect]);
 
   useEffect(() => {
     document.body.style.cursor = hovered && onSelect ? 'pointer' : 'auto';
@@ -405,7 +419,8 @@ function AgentNodeMesh({
   }, [hovered, onSelect]);
   const haloTex  = useMemo(() => makeSoftCircle(), []);
   const haloColor = stateHaloColor(agent.state);
-  const haloSize  = agent.state === 'fresh' ? 0.12 : agent.state === 'warming' ? 0.10 : 0.05;
+  const baseHaloSize = agent.state === 'fresh' ? 0.12 : agent.state === 'warming' ? 0.10 : 0.05;
+  const haloSize     = hovered ? baseHaloSize * 1.45 : baseHaloSize;
   const haloOp    = agent.state === 'cold' ? 0 : agent.state === 'stale' ? 0.2 : 0.55;
 
   useFrame(({ clock }) => {
@@ -416,7 +431,9 @@ function AgentNodeMesh({
       coreRef.current.scale.setScalar(1.8);
       return;
     }
-    coreRef.current.scale.setScalar(1);
+    const targetScale = hovered ? 1.12 : 1.0;
+    const cur = coreRef.current.scale.x;
+    coreRef.current.scale.setScalar(cur + (targetScale - cur) * 0.18);
     const intensity = nodeEmissive(agent.state, clock.elapsedTime, animate);
     const b = Math.min(1, intensity / 2.0);
     mat.color.setRGB(b, b, Math.min(1, b * 1.02));
@@ -424,10 +441,11 @@ function AgentNodeMesh({
 
   return (
     <group position={position.toArray() as [number, number, number]}>
+      {/* Visual sphere */}
       <mesh
         ref={coreRef}
-        onPointerOver={() => setHovered(true)}
-        onPointerOut={() => setHovered(false)}
+        onPointerOver={() => { setHovered(true); onPointerEnter?.(); }}
+        onPointerOut={() => { setHovered(false); onPointerLeave?.(); }}
         onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopPropagation(); if (!globalDraggedRef.current) handleSelect(); }}
       >
         <sphereGeometry args={[0.028, 12, 12]} />
@@ -436,6 +454,12 @@ function AgentNodeMesh({
           blending={THREE.AdditiveBlending}
           depthWrite={false}
         />
+      </mesh>
+
+      {/* Invisible hit sphere — 0.10 radius (3.6× visual) for reliable pointer detection */}
+      <mesh ref={hitMeshRef}>
+        <sphereGeometry args={[0.10, 8, 8]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
       {haloOp > 0 && (
@@ -676,6 +700,55 @@ function useAgentData(): AgentData[] {
 // â”€â”€ Scene â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
+// ── RaycastPointerHandler — manual hit-detection against enlarged invisible spheres ──
+
+function RaycastPointerHandler({
+  hitMeshes,
+  agents,
+  onHover,
+}: {
+  hitMeshes: React.MutableRefObject<(THREE.Mesh | null)[]>;
+  agents: AgentData[];
+  onHover?: (agent: AgentData, sx: number, sy: number) => void;
+}) {
+  const { camera, gl, size } = useThree();
+  const raycaster = useMemo(() => new THREE.Raycaster(), []);
+
+  useEffect(() => {
+    if (!onHover) return;
+    const canvas = gl.domElement;
+
+    const handleMove = (evt: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const ndcX = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+      const ndcY = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
+
+      const meshList = hitMeshes.current.filter((m): m is THREE.Mesh => m !== null);
+      const hits = raycaster.intersectObjects(meshList, false);
+      console.debug('[neuro-ray] meshes:', meshList.length, 'hits:', hits.length, 'ndc:', ndcX.toFixed(3), ndcY.toFixed(3));
+
+      if (hits.length > 0) {
+        const hitIdx = meshList.indexOf(hits[0].object as THREE.Mesh);
+        const agent = agents[hitIdx];
+        if (agent && !agent.id.startsWith('ghost-')) {
+          const worldPos = new THREE.Vector3();
+          hits[0].object.getWorldPosition(worldPos);
+          worldPos.project(camera);
+          const sx = (worldPos.x * 0.5 + 0.5) * size.width;
+          const sy = (-(worldPos.y * 0.5) + 0.5) * size.height;
+          onHover(agent, sx, sy);
+        }
+      }
+    };
+
+    canvas.addEventListener('pointermove', handleMove);
+    return () => canvas.removeEventListener('pointermove', handleMove);
+  }, [camera, gl, raycaster, hitMeshes, agents, onHover, size]);
+
+  return null;
+}
+
 // -- Agent-to-agent curved bezier edges -----------------------------------------
 
 function CurvedAgentEdges({ edges }: { edges: [THREE.Vector3, THREE.Vector3][] }) {
@@ -704,10 +777,11 @@ function CurvedAgentEdges({ edges }: { edges: [THREE.Vector3, THREE.Vector3][] }
   );
 }
 
-function Scene({ animate, onNodeSelect }: { animate: boolean; onNodeSelect?: (agent: AgentData, sx: number, sy: number) => void }) {
+function Scene({ animate, onNodeSelect, onNodeHover }: { animate: boolean; onNodeSelect?: (agent: AgentData, sx: number, sy: number) => void; onNodeHover?: (agent: AgentData, sx: number, sy: number) => void }) {
   const agents = useAgentData();
   const [flashSet, setFlashSet] = useState<Set<number>>(new Set());
   const { scene } = useThree();
+  const hitMeshRefs = useRef<(THREE.Mesh | null)[]>([]);
 
   useEffect(() => { scene.background = new THREE.Color(P.bg); }, [scene]);
 
@@ -771,8 +845,14 @@ function Scene({ animate, onNodeSelect }: { animate: boolean; onNodeSelect?: (ag
           animate={animate}
           flashing={flashSet.has(i)}
           onSelect={onNodeSelect ? (sx, sy) => onNodeSelect(agent, sx, sy) : undefined}
+          hitMeshRef={(el) => { hitMeshRefs.current[i] = el; }}
         />
       ))}
+      <RaycastPointerHandler
+        hitMeshes={hitMeshRefs}
+        agents={agents.slice(0, agentPositions.length)}
+        onHover={onNodeHover}
+      />
       {animate && (
         <PacketLayer edges={edges} nucleusPositions={nucleusNearby} animate={animate} />
       )}
@@ -885,6 +965,45 @@ const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG ?? 'toadsage';
 
 // -- Node popover ---------------------------------------------------------------
 
+// ── NodePopover detail type ───────────────────────────────────────────────────
+
+interface AgentDetail {
+  role: string;
+  skills: string[];
+  channels: string[];
+  taskCount: number;
+  lastActiveMsAgo: number | null;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatLastActive(ms: number | null): string {
+  if (ms === null) return 'unknown';
+  const min = Math.floor(ms / 60_000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  return hr < 24 ? `${hr}h ago` : `${Math.floor(hr / 24)}d ago`;
+}
+
+function stateLabel(s: NodeState): string {
+  if (s === 'fresh') return 'online';
+  if (s === 'warming') return 'active';
+  if (s === 'stale') return 'degraded';
+  return 'offline';
+}
+
+function stateDotColor(s: NodeState): string {
+  if (s === 'fresh') return '#5ADAEE';
+  if (s === 'warming') return '#FFAF2A';
+  if (s === 'stale') return '#FFAF2A';
+  return 'rgba(232,244,248,0.20)';
+}
+
+function agentInitials(name: string): string {
+  return name.slice(0, 2).toUpperCase() || '??';
+}
+
 function NodePopover({
   agent, sx, sy, containerW, containerH, onClose,
 }: {
@@ -895,10 +1014,19 @@ function NodePopover({
   containerH?: number;
   onClose(): void;
 }) {
-  const router = useRouter();
+  const [detail, setDetail] = useState<AgentDetail | null>(null);
   const popLeft = sx > containerW * 0.6;
-  const channelId = agent.id.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-  const POPOVER_W = 220;
+  const POPOVER_W = 320;
+  const POPOVER_H_EST = 380;
+  const cH = containerH ?? 600;
+
+  useEffect(() => {
+    if (!agent.id || agent.id.startsWith('ghost-')) return;
+    fetch(`/api/hotbox/agents/${encodeURIComponent(agent.id)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setDetail(d))
+      .catch(() => {});
+  }, [agent.id]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -907,68 +1035,274 @@ function NodePopover({
   }, [onClose]);
 
   const posStyle: React.CSSProperties = popLeft
-    ? { right: containerW - sx + 12 }
-    : { left: sx + 12 };
+    ? { right: containerW - sx + 16 }
+    : { left: sx + 16 };
+
+  const topClamped = Math.max(8, Math.min(sy - 24, cH - POPOVER_H_EST - 8));
+  const channelId = agent.id.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 
   return (
-    <div
-      style={{
-        position: 'absolute',
-        top: Math.min(sy, Math.max(0, (containerH ?? 600) - 180)),
-        ...posStyle,
-        width: POPOVER_W,
-        background: 'rgba(5,12,20,0.92)',
-        border: '1px solid rgba(143,232,245,0.18)',
-        borderRadius: 12,
-        padding: '14px 16px',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        color: '#C8ECF4',
-        fontFamily: 'monospace',
-        fontSize: 12,
-        letterSpacing: '0.04em',
-        zIndex: 30,
-        boxShadow: '0 0 32px rgba(0,212,255,0.08)',
-        pointerEvents: 'all',
-      }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-        <span style={{ color: '#8FE8F5', fontWeight: 700, fontSize: 13 }}>{agent.name}</span>
+    <>
+      <style>{`
+        @keyframes popoverIn {
+          from { opacity: 0; transform: scale(0.90) translateY(4px); }
+          to   { opacity: 1; transform: scale(1)    translateY(0); }
+        }
+      `}</style>
+      <div
+        data-testid="node-popover"
+        data-agent-id={agent.id}
+        style={{
+          position: 'absolute',
+          top: topClamped,
+          ...posStyle,
+          width: POPOVER_W,
+          background: 'rgba(5,12,20,0.94)',
+          border: '1px solid rgba(90,218,238,0.18)',
+          borderRadius: 14,
+          padding: '18px 20px 16px',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          color: '#E8F4F8',
+          fontFamily: "'Space Grotesk', sans-serif",
+          fontSize: 13,
+          zIndex: 30,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.56), 0 0 0 0.5px rgba(90,218,238,0.08), inset 0 1px 0 rgba(90,218,238,0.06)',
+          pointerEvents: 'all',
+          animation: 'popoverIn 0.28s cubic-bezier(0.34,1.56,0.64,1) both',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* ── Close button ──────────────────────────────────────────────── */}
         <button
           onClick={onClose}
-          style={{ background: 'none', border: 'none', color: '#8FE8F5', cursor: 'pointer',
-            fontSize: 14, opacity: 0.6, lineHeight: 1, padding: '0 0 0 8px' }}
+          style={{
+            position: 'absolute', top: 12, right: 14,
+            background: 'none', border: 'none', color: 'rgba(232,244,248,0.45)',
+            cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 4,
+          }}
         >
           ✕
         </button>
+
+        {/* ── Header: avatar + name + role ──────────────────────────────── */}
+        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', marginBottom: 14 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: '50%', flexShrink: 0,
+            background: 'linear-gradient(135deg, rgba(90,218,238,0.22) 0%, rgba(5,12,20,0.80) 100%)',
+            border: '1.5px solid rgba(90,218,238,0.35)',
+            boxShadow: agent.state === 'fresh'
+              ? '0 0 10px rgba(90,218,238,0.40), 0 0 22px rgba(90,218,238,0.18)'
+              : agent.state === 'warming'
+              ? '0 0 10px rgba(255,175,42,0.40), 0 0 22px rgba(255,175,42,0.18)'
+              : 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: "'Space Grotesk', sans-serif",
+            fontWeight: 600, fontSize: 16, color: '#8FE8F5', letterSpacing: '-0.01em',
+          }}>
+            {agentInitials(agent.name)}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontWeight: 600, fontSize: 15, color: '#E8F4F8',
+              letterSpacing: '-0.01em', lineHeight: 1.2, marginBottom: 5,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
+              {agent.name || '—'}
+            </div>
+            <span style={{
+              display: 'inline-block',
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10, fontWeight: 500,
+              letterSpacing: '0.06em', textTransform: 'uppercase',
+              color: '#5ADAEE',
+              background: 'rgba(90,218,238,0.10)',
+              border: '1px solid rgba(90,218,238,0.20)',
+              borderRadius: 4, padding: '2px 7px',
+            }}>
+              {detail?.role ?? agent.role ?? 'agent'}
+            </span>
+          </div>
+        </div>
+
+        {/* ── Status row ────────────────────────────────────────────────── */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 7,
+          marginBottom: 14, paddingBottom: 14,
+          borderBottom: '1px solid rgba(90,218,238,0.08)',
+        }}>
+          <span style={{
+            width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+            background: stateDotColor(agent.state),
+            boxShadow: agent.state !== 'cold' ? `0 0 5px ${stateDotColor(agent.state)}` : 'none',
+          }} />
+          <span style={{ color: stateDotColor(agent.state), fontSize: 12, fontWeight: 500 }}>
+            {stateLabel(agent.state)}
+          </span>
+          {detail?.lastActiveMsAgo !== undefined && (
+            <span style={{ color: 'rgba(232,244,248,0.40)', fontSize: 12 }}>
+              · last active {formatLastActive(detail.lastActiveMsAgo)}
+            </span>
+          )}
+        </div>
+
+        {/* ── Metrics row ───────────────────────────────────────────────── */}
+        {detail && (
+          <div style={{ display: 'flex', gap: 20, marginBottom: 14 }}>
+            <div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 600, color: '#5ADAEE', lineHeight: 1 }}>
+                {detail.taskCount}
+              </div>
+              <div style={{ fontSize: 10, color: 'rgba(232,244,248,0.45)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 3 }}>
+                tasks
+              </div>
+            </div>
+            <div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 600, color: '#5ADAEE', lineHeight: 1 }}>
+                {detail.channels.length}
+              </div>
+              <div style={{ fontSize: 10, color: 'rgba(232,244,248,0.45)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 3 }}>
+                channels
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Channel pills ─────────────────────────────────────────────── */}
+        {detail && detail.channels.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase',
+              color: 'rgba(232,244,248,0.35)', marginBottom: 6,
+            }}>
+              Channels
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {detail.channels.slice(0, 6).map((ch) => (
+                <span key={ch} style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10, color: 'rgba(232,244,248,0.60)',
+                  background: 'rgba(90,218,238,0.06)',
+                  border: '1px solid rgba(90,218,238,0.12)',
+                  borderRadius: 4, padding: '2px 6px',
+                }}>
+                  #{ch}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Skills ───────────────────────────────────────────────────── */}
+        {detail && detail.skills.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase',
+              color: 'rgba(232,244,248,0.35)', marginBottom: 6,
+            }}>
+              Skills
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {detail.skills.slice(0, 8).map((sk) => (
+                <span key={sk} style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9, color: '#5ADAEE',
+                  background: 'rgba(90,218,238,0.08)',
+                  border: '1px solid rgba(90,218,238,0.15)',
+                  borderRadius: 3, padding: '2px 5px',
+                }}>
+                  {sk}
+                </span>
+              ))}
+              {detail.skills.length > 8 && (
+                <span style={{
+                  fontSize: 9, color: 'rgba(232,244,248,0.30)',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  padding: '2px 5px',
+                }}>
+                  +{detail.skills.length - 8}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Loading skeleton ──────────────────────────────────────────── */}
+        {!detail && !agent.id.startsWith('ghost-') && (
+          <div style={{ marginBottom: 16 }}>
+            {[80, 60, 90].map((w, i) => (
+              <div key={i} style={{
+                height: 9, marginBottom: 7, borderRadius: 4,
+                width: `${w}%`,
+                background: 'rgba(90,218,238,0.07)',
+              }} />
+            ))}
+          </div>
+        )}
+
+        {/* ── Action buttons ────────────────────────────────────────────── */}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Link
+            href={`/dm/${channelId}`}
+            onClick={onClose}
+            style={{
+              flex: 1,
+              display: 'block',
+              textAlign: 'center',
+              textDecoration: 'none',
+              background: '#5ADAEE',
+              border: 'none',
+              borderRadius: 8,
+              color: '#050C14',
+              fontFamily: "'Space Grotesk', sans-serif",
+              fontWeight: 600, fontSize: 12,
+              letterSpacing: '0.01em',
+              padding: '9px 12px',
+              cursor: 'pointer',
+              boxShadow: '0 0 14px rgba(90,218,238,0.28)',
+              transition: 'box-shadow 150ms ease',
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = '0 0 22px rgba(90,218,238,0.48)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = '0 0 14px rgba(90,218,238,0.28)'; }}
+          >
+            DM {agent.name}
+          </Link>
+          <Link
+            href={`/dm/${channelId}?lens=profile`}
+            onClick={onClose}
+            style={{
+              flex: 1,
+              display: 'block',
+              textAlign: 'center',
+              textDecoration: 'none',
+              background: 'none',
+              border: '1px solid rgba(90,218,238,0.25)',
+              borderRadius: 8,
+              color: 'rgba(232,244,248,0.65)',
+              fontFamily: "'Space Grotesk', sans-serif",
+              fontWeight: 500, fontSize: 12,
+              padding: '9px 12px',
+              cursor: 'pointer',
+              transition: 'border-color 150ms ease, color 150ms ease',
+            }}
+            onMouseEnter={(e) => {
+              const el = e.currentTarget as HTMLAnchorElement;
+              el.style.borderColor = 'rgba(90,218,238,0.50)';
+              el.style.color = '#E8F4F8';
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget as HTMLAnchorElement;
+              el.style.borderColor = 'rgba(90,218,238,0.25)';
+              el.style.color = 'rgba(232,244,248,0.65)';
+            }}
+          >
+            View profile
+          </Link>
+        </div>
       </div>
-      <div style={{ marginBottom: 4, opacity: 0.7 }}>
-        state:{' '}
-        <span style={{ color: agent.state === 'fresh' ? '#00D4FF' : agent.state === 'warming' ? '#FFAF2A' : '#8FE8F5' }}>
-          {agent.state}
-        </span>
-      </div>
-      <div style={{ marginBottom: 12, opacity: 0.5, wordBreak: 'break-all' }}>id: {agent.id}</div>
-      <button
-        onClick={() => { router.push(`/dm/${channelId}`); onClose(); }}
-        style={{
-          width: '100%',
-          background: 'rgba(0,212,255,0.12)',
-          border: '1px solid rgba(0,212,255,0.3)',
-          borderRadius: 6,
-          color: '#00D4FF',
-          fontFamily: 'monospace',
-          fontSize: 11,
-          letterSpacing: '0.06em',
-          padding: '6px 10px',
-          cursor: 'pointer',
-          textTransform: 'uppercase',
-        }}
-      >
-        → Hotbox channel
-      </button>
-    </div>
+    </>
   );
 }
 
@@ -983,12 +1317,19 @@ export default function NeuralGlobe({ prefersReduced }: { prefersReduced: boolea
     setSelectedNode((prev) => (prev?.agent.id === agent.id ? null : { agent, sx, sy }));
   }, []);
 
+  const handleNodeHover = useCallback((agent: AgentData, sx: number, sy: number) => {
+    if (agent.id.startsWith('ghost-')) return;
+    setSelectedNode({ agent, sx, sy });
+  }, []);
+
   const handleClose = useCallback(() => setSelectedNode(null), []);
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}
       onClick={handleClose}
+      data-hovered-agent={selectedNode?.agent.id ?? ''}
     >
+      <span data-testid="hovered-agent-id" style={{ display: 'none' }}>{selectedNode?.agent.id ?? ''}</span>
       <Canvas
         camera={{ fov: 55, near: 0.1, far: 100, position: [0, 0.4, 2.8] }}
         gl={{
@@ -999,7 +1340,7 @@ export default function NeuralGlobe({ prefersReduced }: { prefersReduced: boolea
         }}
         dpr={[1, 2]}
       >
-        <Scene animate={animate} onNodeSelect={handleNodeSelect} />
+        <Scene animate={animate} onNodeSelect={handleNodeSelect} onNodeHover={handleNodeHover} />
         <CameraRig animate={animate} />
         <PostFX />
       </Canvas>
@@ -1022,6 +1363,50 @@ export default function NeuralGlobe({ prefersReduced }: { prefersReduced: boolea
         pointerEvents: 'none', userSelect: 'none',
       }}>
         {ORG} Â· neural link v2
+      </div>
+
+      {/* ── Canvas control chrome ────────────────────────────────────── */}
+      <div style={{
+        position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
+        display: 'flex', alignItems: 'center', gap: 8,
+        pointerEvents: 'all',
+      }}>
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: 'rgba(5,12,20,0.72)',
+            border: '1px solid rgba(90,218,238,0.15)',
+            borderRadius: 8, padding: '6px 12px',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span style={{ color: 'rgba(232,244,248,0.35)', fontSize: 13 }}>⌕</span>
+          <input
+            placeholder="Search nodes, messages, agents…"
+            style={{
+              background: 'none', border: 'none', outline: 'none',
+              color: '#E8F4F8', fontFamily: "'Space Grotesk', sans-serif",
+              fontSize: 12, width: 200, letterSpacing: '0.01em',
+            }}
+          />
+        </div>
+        <button
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            background: 'rgba(5,12,20,0.72)',
+            border: '1px solid rgba(90,218,238,0.20)',
+            borderRadius: 8, padding: '6px 14px',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            color: 'rgba(232,244,248,0.70)',
+            fontFamily: "'Space Grotesk', sans-serif",
+            fontSize: 12, fontWeight: 500, cursor: 'pointer',
+          }}
+        >
+          + Create
+        </button>
       </div>
 
       {/* Headmaster + Orchestrator labels — pinned near canvas center */}
