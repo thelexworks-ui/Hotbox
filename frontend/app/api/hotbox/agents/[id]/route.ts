@@ -11,10 +11,11 @@ export async function GET(
 
   if (id.startsWith('ghost-')) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
+  // id is the agent name slug (e.g. "boss", "hepha-web"), not a UUID PK
   const { data: account } = await db
     .from('agent_accounts')
-    .select('id, name, role, skills, org_id')
-    .eq('id', id)
+    .select('id, name, role, org_id')
+    .eq('name', id)
     .maybeSingle();
 
   if (!account) return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -32,7 +33,7 @@ export async function GET(
     .map((r) => r.key_path as string)
     .slice(0, 10);
 
-  // Task count (open + in_progress) — 0 if table absent
+  // Task count — 0 if table absent or wrong schema
   let taskCount = 0;
   try {
     const { count } = await db
@@ -55,10 +56,10 @@ export async function GET(
   } catch {}
 
   return NextResponse.json({
-    id: account.id,
-    name: account.name,
+    id: account.name as string,
+    name: account.name as string,
     role: (account.role as string) ?? 'agent',
-    skills: (account.skills as string[] | null) ?? [],
+    skills: [],
     channels,
     taskCount,
     lastActiveMsAgo,
