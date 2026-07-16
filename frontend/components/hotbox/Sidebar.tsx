@@ -8,6 +8,7 @@ import { useWs } from './WsProvider';
 import { useHeadmasters, useOrchestrators, useAgentsOnly, type Member } from '@/hooks/useMembers';
 import { ChannelCreateModal } from './ChannelCreateModal';
 import { MembersPanel, RoleBadge } from './MembersPanel';
+import { useAuth } from './AuthProvider';
 
 const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG ?? 'toadsage';
 const WORKSPACE_NAME = process.env.NEXT_PUBLIC_HOTBOX_WORKSPACE_NAME ?? ORG;
@@ -147,11 +148,23 @@ function RoleSection({
 
 // ── Channel items ────────────────────────────────────────────────────────────
 
+function dmOtherSlug(channelId: string, mySlug: string): string {
+  // channel.id = dm-{a}-{b}. Strip dm-{mySlug}- prefix when we are the initiator.
+  // Fall back to stripping -${mySlug} suffix when we are the target (agent-initiated DM).
+  // This correctly handles hyphenated agent names like hepha-web.
+  const withPrefix = `dm-${mySlug}-`;
+  if (channelId.startsWith(withPrefix)) return channelId.slice(withPrefix.length);
+  const withSuffix = `-${mySlug}`;
+  if (channelId.endsWith(withSuffix)) return channelId.slice('dm-'.length, -withSuffix.length);
+  return channelId.replace(/^dm-/, '');
+}
+
 function ChannelItem({ channel, onItemClick }: { channel: ChannelMeta; onItemClick?: () => void }) {
   const pathname = usePathname();
   const presence = useHotboxStore((s) => s.presence[channel.agent_name ?? '']);
+  const { memberId } = useAuth();
   const href = channel.type === 'dm'
-    ? `/dm/${channel.id.replace(/^dm-/, '')}`
+    ? `/dm/${dmOtherSlug(channel.id, memberId)}`
     : `/channels/${channel.id}`;
   const active = pathname.includes(channel.id);
 
