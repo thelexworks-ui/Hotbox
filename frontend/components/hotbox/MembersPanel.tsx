@@ -22,7 +22,7 @@ function PresenceDot({ status, size = 'md' }: { status: PresenceStatus; size?: '
 
 export function RoleBadge({ role }: { role: 'orchestrator' | 'headmaster' }) {
   const label = role === 'orchestrator' ? 'orch' : 'hm';
-  const bg = role === 'orchestrator' ? 'var(--hotbox-surface-2)' : 'rgba(250,166,26,0.15)';
+  const bg = role === 'orchestrator' ? 'var(--hotbox-accent-subtle)' : 'rgba(250,166,26,0.12)';
   const color = role === 'orchestrator' ? 'var(--hotbox-accent)' : 'var(--hotbox-mention)';
   return (
     <span
@@ -42,7 +42,7 @@ export function MemberAvatar({ member, size = 32 }: { member: Member; size?: num
       style={{
         width: size,
         height: size,
-        background: isAgent ? 'var(--hotbox-surface-2)' : 'var(--hotbox-border)',
+        background: isAgent ? 'var(--hotbox-accent-subtle)' : 'var(--hotbox-border)',
         color: isAgent ? 'var(--hotbox-accent)' : 'var(--hotbox-text-muted)',
         borderRadius: isAgent ? 6 : size / 2,
       }}

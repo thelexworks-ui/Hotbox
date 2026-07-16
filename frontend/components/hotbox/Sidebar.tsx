@@ -64,10 +64,10 @@ function MemberItem({ member, status }: { member: Member; status: PresenceStatus
       href={href}
       title={`${member.name} · ${member.role}`}
       className={[
-        'flex items-center gap-2.5 px-4 py-[3px] rounded mx-1',
+        'flex items-center gap-2.5 px-4 py-[3px] rounded mx-1 transition-colors',
         active
-          ? 'bg-[var(--hotbox-surface-2)] text-[var(--hotbox-text)]'
-          : 'text-[var(--hotbox-text-muted)] hover:bg-[var(--hotbox-surface-2)] hover:text-[var(--hotbox-text)]',
+          ? 'bg-[var(--hotbox-selected)] text-[var(--hotbox-text)] font-medium'
+          : 'text-[var(--hotbox-text-muted)] hover:bg-[var(--hotbox-surface-hover)] hover:text-[var(--hotbox-text)]',
       ].join(' ')}
     >
       <PresenceDot status={status} size={7} />
@@ -139,10 +139,10 @@ function ChannelItem({ channel, onItemClick }: { channel: ChannelMeta; onItemCli
       href={href}
       onClick={onItemClick}
       className={[
-        'flex items-center gap-2 px-2 py-[3px] rounded mx-1',
+        'flex items-center gap-2 px-2 py-[3px] rounded mx-1 transition-colors relative',
         active
-          ? 'bg-[var(--hotbox-surface-2)] text-[var(--hotbox-text)]'
-          : 'text-[var(--hotbox-text-muted)] hover:bg-[var(--hotbox-surface)] hover:text-[var(--hotbox-text)]',
+          ? 'bg-[var(--hotbox-selected)] text-[var(--hotbox-text)] font-medium hotbox-channel-active'
+          : 'text-[var(--hotbox-text-muted)] hover:bg-[var(--hotbox-surface-hover)] hover:text-[var(--hotbox-text)]',
       ].join(' ')}
     >
       {channel.agent_name && presence && <PresenceDot status={presence} />}
@@ -282,7 +282,7 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
         style={{ background: 'var(--hotbox-surface)' }}
       >
         {/* Workspace header */}
-        <div className="px-4 py-2 mb-2 flex items-center justify-between border-b border-[var(--hotbox-border)]">
+        <div className="px-4 py-2 mb-2 flex items-center justify-between border-b border-[var(--hotbox-border-strong)]">
           <span data-testid="workspace-label" className="font-semibold text-sm text-[var(--hotbox-text)] truncate">
             {WORKSPACE_NAME}
           </span>
