@@ -129,18 +129,33 @@ export default function DmInboxPage() {
                     href={`/dm/${memberId}`}
                     className="flex items-center gap-3 px-4 py-2.5 hover:bg-[var(--hotbox-surface-2)] transition-colors"
                   >
-                    {/* Avatar placeholder */}
-                    <div
-                      className="relative flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold select-none"
-                      style={{ background: 'var(--hotbox-surface-2)', color: 'var(--hotbox-text-muted)' }}
-                    >
-                      {displayName.charAt(0).toUpperCase()}
-                      {/* Presence dot overlaid bottom-right */}
-                      <span className="absolute bottom-0 right-0 p-0.5 rounded-full"
-                        style={{ background: 'var(--hotbox-bg)' }}>
-                        <PresenceDot status={status} />
-                      </span>
-                    </div>
+                    {/* Avatar with role halo */}
+                    {(() => {
+                      const isAgent = !!member && member.role !== 'user';
+                      const isHM    = member?.role === 'headmaster';
+                      const isOrch  = member?.role === 'orchestrator';
+                      const haloBg  = isHM ? 'rgba(255,215,0,0.12)' : isAgent ? 'var(--hotbox-accent-subtle)' : 'var(--hotbox-surface-2)';
+                      const haloClr = isHM ? '#FFD700' : isAgent ? 'var(--hotbox-accent)' : 'var(--hotbox-text-muted)';
+                      const haloRing = isHM
+                        ? '0 0 0 1.5px rgba(255,215,0,0.60), 0 0 12px rgba(255,215,0,0.25)'
+                        : isOrch
+                        ? '0 0 0 1.5px rgba(248,254,255,0.40), 0 0 12px rgba(248,254,255,0.15)'
+                        : isAgent
+                        ? '0 0 0 1.5px rgba(90,218,238,0.50), 0 0 12px rgba(90,218,238,0.20)'
+                        : 'none';
+                      return (
+                        <div
+                          className="relative flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold select-none"
+                          style={{ background: haloBg, color: haloClr, boxShadow: haloRing }}
+                        >
+                          {displayName.charAt(0).toUpperCase()}
+                          <span className="absolute bottom-0 right-0 p-0.5 rounded-full"
+                            style={{ background: 'var(--hotbox-bg)' }}>
+                            <PresenceDot status={status} />
+                          </span>
+                        </div>
+                      );
+                    })()}
 
                     {/* Name + meta */}
                     <div className="flex-1 min-w-0">
