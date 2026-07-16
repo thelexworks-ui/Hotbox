@@ -64,11 +64,26 @@ echo "[run-adapters] starting adapters for: $AGENTS"
 echo "[run-adapters] adapter: $ADAPTER_SCRIPT"
 echo ""
 
+# DM slug overrides — agents whose bus name differs from their channel slug.
+# Format: "agent_id:dm_slug" entries, space-separated.
+DM_SLUG_OVERRIDES="${DM_SLUG_OVERRIDES:-hepha-web:hepha}"
+
+get_dm_slug() {
+  local agent="$1"
+  for entry in $DM_SLUG_OVERRIDES; do
+    local key="${entry%%:*}"
+    local val="${entry##*:}"
+    if [[ "$key" == "$agent" ]]; then echo "$val"; return; fi
+  done
+  echo "$agent"
+}
+
 # ── start mode ───────────────────────────────────────────────────────────────
 for AGENT in $AGENTS; do
   LOG="${LOG_DIR}/hotbox-adapter-${AGENT}.log"
   CURSOR="${LOG_DIR}/hotbox-adapter-${AGENT}-cursor.json"
   PID_FILE="${LOG_DIR}/hotbox-adapter-${AGENT}.pid"
+  DM_SLUG="$(get_dm_slug "$AGENT")"
 
   # Kill stale process if PID file exists
   if [[ -f "$PID_FILE" ]]; then
@@ -82,12 +97,13 @@ for AGENT in $AGENTS; do
   fi
 
   HOTBOX_AGENT_ID="$AGENT" \
+  HOTBOX_DM_SLUG="$DM_SLUG" \
   HOTBOX_ADAPTER_CURSOR_FILE="$CURSOR" \
   node "$ADAPTER_SCRIPT" >> "$LOG" 2>&1 &
 
   PID=$!
   echo "$PID" > "$PID_FILE"
-  echo "[run-adapters] ✓ ${AGENT}  PID=${PID}  log=${LOG}"
+  echo "[run-adapters] ✓ ${AGENT}  DM=dm-lex-${DM_SLUG}  PID=${PID}  log=${LOG}"
 done
 
 echo ""

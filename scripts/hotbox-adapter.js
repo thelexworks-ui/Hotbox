@@ -23,6 +23,9 @@
  *   HOTBOX_MEMBER_REFRESH_MS   — how often to rediscover channels, defaults to 60000
  *   HOTBOX_ADAPTER_CURSOR_FILE — defaults to /tmp/hotbox-adapter-{AGENT_ID}-cursor.json
  *   HOTBOX_HUMAN_ID            — human member in DM channel, defaults to 'lex'
+ *   HOTBOX_DM_SLUG             — override the slug used in the DM channel ID when it differs
+ *                                from HOTBOX_AGENT_ID (e.g. AGENT_ID=hepha-web, DM_SLUG=hepha
+ *                                → channel dm-lex-hepha). Defaults to HOTBOX_AGENT_ID.
  */
 
 'use strict';
@@ -45,6 +48,10 @@ const SB_URL       = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').replace(/\/$/,
 const SB_KEY       = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 const JWT_SECRET   = process.env.HOTBOX_JWT_SECRET ?? '';
 const HUMAN_ID     = process.env.HOTBOX_HUMAN_ID ?? 'lex';
+// DM_SLUG: the slug used in the channel ID dm-{HUMAN_ID}-{DM_SLUG}.
+// Agents whose bus name differs from their channel slug (e.g. hepha-web → dm-lex-hepha)
+// set HOTBOX_DM_SLUG to the shorter form.
+const DM_SLUG      = process.env.HOTBOX_DM_SLUG ?? AGENT_ID;
 
 if (!AGENT_ID)    { console.error('[adapter] HOTBOX_AGENT_ID required'); process.exit(1); }
 if (!SB_URL || !SB_KEY) { console.error('[adapter] NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY required'); process.exit(1); }
@@ -162,7 +169,7 @@ async function refreshMembership() {
 
 // ── DM channel bootstrap ────────────────────────────────────────────────────
 async function bootstrapMyDmChannel() {
-  const channelId = `dm-${HUMAN_ID}-${AGENT_ID}`;
+  const channelId = `dm-${HUMAN_ID}-${DM_SLUG}`;
 
   // Ensure channel row exists
   const existing = await sbGet('hotbox_channels', {
