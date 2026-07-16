@@ -8,6 +8,7 @@ import { useWs } from './WsProvider';
 import { useHeadmasters, useOrchestrators, useAgentsOnly, type Member } from '@/hooks/useMembers';
 import { ChannelCreateModal } from './ChannelCreateModal';
 import { MembersPanel, RoleBadge } from './MembersPanel';
+import { InviteModal } from './InviteModal';
 import { useAuth } from './AuthProvider';
 
 const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG ?? 'toadsage';
@@ -221,9 +222,12 @@ export function Sidebar({ onItemClick, onNeuralLink }: { onItemClick?: () => voi
   const orchestrators = useOrchestrators(30_000);
   const agentsOnly    = useAgentsOnly(15_000);
 
+  const { role } = useAuth();
+
   const [showCreate, setShowCreate]   = useState(false);
   const [showMembers, setShowMembers] = useState(false);
   const [membersFilter, setMembersFilter] = useState<'all' | 'user' | 'agent'>('all');
+  const [showInvite, setShowInvite]   = useState(false);
   const [refreshing, setRefreshing]   = useState(false);
   const [refreshKey, setRefreshKey]   = useState(0);
 
@@ -308,6 +312,8 @@ export function Sidebar({ onItemClick, onNeuralLink }: { onItemClick?: () => voi
         />
       )}
 
+      {showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
+
       <MembersPanel
         open={showMembers}
         onClose={() => setShowMembers(false)}
@@ -381,6 +387,15 @@ export function Sidebar({ onItemClick, onNeuralLink }: { onItemClick?: () => voi
           >
             + New Channel
           </button>
+          {role === 'headmaster' && (
+            <button
+              data-testid="sidebar-invite-button"
+              onClick={() => setShowInvite(true)}
+              className="w-full text-left text-xs text-[var(--hotbox-text-dim)] hover:text-[var(--hotbox-accent)] py-1 transition-colors"
+            >
+              + Invite member
+            </button>
+          )}
         </div>
       </nav>
     </>
