@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 
   const { data: user, error } = await db
     .from('users')
-    .select('id, org_id, role, password_hash')
+    .select('id, org_id, email, role, password_hash')
     .eq('email', email)
     .maybeSingle();
 
@@ -43,6 +43,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
   }
 
+  const { data: org } = await db.from('orgs').select('id, slug, name').eq('id', user.org_id).single();
+  if (!org) {
+    return NextResponse.json({ error: 'Org not found' }, { status: 500 });
+  }
+
   const accessToken = await signAccessToken({ sub: user.id, org: user.org_id, role: user.role });
   const rawRefresh = generateRefreshToken();
   await db.from('refresh_tokens').insert({
@@ -51,7 +56,13 @@ export async function POST(req: NextRequest) {
     expires_at: refreshTokenExpiry().toISOString(),
   });
 
-  const res = NextResponse.json({ token: accessToken, userId: user.id, orgId: user.org_id, role: user.role });
+  const userSlug = user.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const res = NextResponse.json({
+    token: accessToken,
+    refreshToken: rawRefresh,
+    user: { id: user.id, email: user.email, slug: userSlug },
+    org: { id: org.id, slug: org.slug, name: org.name },
+  });
   res.cookies.set('hx_refresh', rawRefresh, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',

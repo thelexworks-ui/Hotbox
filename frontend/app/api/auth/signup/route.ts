@@ -108,7 +108,13 @@ export async function POST(req: NextRequest) {
     console.error('[signup] refresh_token insert error:', rtErr);
   }
 
-  const res = NextResponse.json({ token: accessToken, userId: user.id, orgId: org.id }, { status: 201 });
+  const userSlug = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const res = NextResponse.json({
+    token: accessToken,
+    refreshToken: rawRefresh,
+    user: { id: user.id, email: user.email, slug: userSlug },
+    org: { id: org.id, slug: org.slug, name: org.name },
+  }, { status: 201 });
   res.cookies.set('hx_refresh', rawRefresh, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
