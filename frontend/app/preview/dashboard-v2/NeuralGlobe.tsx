@@ -951,7 +951,7 @@ function NodePopover({
       </div>
       <div style={{ marginBottom: 12, opacity: 0.5, wordBreak: 'break-all' }}>id: {agent.id}</div>
       <button
-        onClick={() => { router.push(`/channels/${channelId}`); onClose(); }}
+        onClick={() => { router.push(`/dm/${channelId}`); onClose(); }}
         style={{
           width: '100%',
           background: 'rgba(0,212,255,0.12)',
