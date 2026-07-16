@@ -1,21 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { validateMasterKey } from '@/lib/hotbox/master-key';
+import { verifyAccessToken } from '@/lib/fusion/auth';
 
 export const runtime = 'nodejs';
 
-function isAuthorized(req: NextRequest): boolean {
+async function isAuthorized(req: NextRequest): Promise<boolean> {
   // Server-to-server: any valid master key grants access
   if (validateMasterKey(req.headers.get('x-master-key'))) return true;
-  // Cookie: Lex's browser — member must match HOTBOX_MEMBER_ID
+  // Browser: resolve memberId from hx_access JWT or legacy cookie
   const cookieStore = cookies();
-  const memberId = cookieStore.get('hotbox-member-id')?.value;
+  let memberId: string | null = null;
+  const jwt = cookieStore.get('hx_access')?.value;
+  if (jwt) {
+    try { memberId = (await verifyAccessToken(jwt)).member_id ?? null; } catch { /* expired */ }
+  }
+  memberId ??= cookieStore.get('hotbox-member-id')?.value ?? null;
   const lexId = process.env.HOTBOX_MEMBER_ID;
   return !!(lexId && memberId === lexId);
 }
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!await isAuthorized(req)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
