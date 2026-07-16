@@ -42,7 +42,16 @@ function LoginForm() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--hotbox-bg)' }}>
-      <div style={{ width: '100%', maxWidth: 360, background: 'var(--hotbox-surface)', border: '1px solid var(--hotbox-border)', borderRadius: 12, padding: '2rem' }}>
+      <div style={{
+        width: '100%',
+        maxWidth: 360,
+        background: 'rgba(10,22,40,0.90)',
+        border: '1px solid rgba(26,74,90,0.60)',
+        borderRadius: 16,
+        padding: '2rem',
+        backdropFilter: 'blur(20px)',
+        boxShadow: '0 24px 64px rgba(0,0,0,0.64), 0 4px 16px rgba(90,218,238,0.06)',
+      }}>
         <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4, color: 'var(--hotbox-text)' }}>
           Join {WORKSPACE} on Hotbox
         </h1>
@@ -88,7 +97,20 @@ function LoginForm() {
             type="submit"
             data-testid="login-submit"
             disabled={disabled}
-            style={{ background: 'var(--hotbox-accent)', color: 'white', border: 'none', borderRadius: 6, padding: '10px', fontSize: 14, fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, marginTop: 4 }}
+            style={{
+              background: disabled ? 'var(--hotbox-border)' : 'var(--hotbox-amber)',
+              color: disabled ? 'var(--hotbox-text-dim)' : 'var(--hotbox-amber-fg)',
+              border: 'none',
+              borderRadius: 7,
+              padding: '11px',
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              marginTop: 4,
+              width: '100%',
+              boxSizing: 'border-box' as const,
+              transition: 'background 150ms ease-out',
+            }}
           >
             {loading ? 'Joining…' : 'Join'}
           </button>

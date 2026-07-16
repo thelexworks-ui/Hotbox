@@ -200,13 +200,14 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
           className={[
             'flex-shrink-0 rounded-lg px-2.5 py-1.5 text-sm font-semibold transition-all',
             text.trim() && !isDisabled
-              ? 'bg-[var(--hotbox-accent)] text-white'
+              ? 'text-[var(--hotbox-amber-fg)]'
               : 'bg-[var(--hotbox-border)] text-[var(--hotbox-text-dim)] cursor-not-allowed',
           ].join(' ')}
           style={text.trim() && !isDisabled ? {
+            background: 'var(--hotbox-amber)',
             transition: `background var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out)`,
           } : undefined}
-          onMouseEnter={(e) => { if (text.trim() && !isDisabled) (e.currentTarget as HTMLButtonElement).style.boxShadow = 'var(--hotbox-accent-glow)'; }}
+          onMouseEnter={(e) => { if (text.trim() && !isDisabled) (e.currentTarget as HTMLButtonElement).style.boxShadow = 'var(--hotbox-amber-glow)'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = ''; }}
           onClick={handleSend}
           disabled={!text.trim() || isDisabled}
