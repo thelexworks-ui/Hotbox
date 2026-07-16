@@ -384,25 +384,38 @@ function CommandChainEdges({ agentPositions }: { agentPositions: THREE.Vector3[]
 }
 
 function AgentNodeMesh({
-  position, agent, animate, flashing, onSelect,
+  position, agent, animate, flashing, onSelect, onHover,
 }: {
   position: THREE.Vector3;
   agent: AgentData;
   animate: boolean;
   flashing: boolean;
   onSelect?: (sx: number, sy: number) => void;
+  onHover?: (sx: number, sy: number) => void;
 }) {
   const coreRef  = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
   const { camera, size } = useThree();
 
+  const projectToScreen = useCallback((): [number, number] => {
+    const projected = position.clone().project(camera);
+    return [
+      (projected.x * 0.5 + 0.5) * size.width,
+      (-(projected.y * 0.5) + 0.5) * size.height,
+    ];
+  }, [position, camera, size]);
+
   const handleSelect = useCallback(() => {
     if (!onSelect) return;
-    const projected = position.clone().project(camera);
-    const sx = (projected.x * 0.5 + 0.5) * size.width;
-    const sy = (-(projected.y * 0.5) + 0.5) * size.height;
+    const [sx, sy] = projectToScreen();
     onSelect(sx, sy);
-  }, [position, camera, size, onSelect]);
+  }, [projectToScreen, onSelect]);
+
+  const handleHover = useCallback(() => {
+    if (!onHover) return;
+    const [sx, sy] = projectToScreen();
+    onHover(sx, sy);
+  }, [projectToScreen, onHover]);
 
   useEffect(() => {
     document.body.style.cursor = hovered && onSelect ? 'pointer' : 'auto';
@@ -434,7 +447,7 @@ function AgentNodeMesh({
     <group position={position.toArray() as [number, number, number]}>
       <mesh
         ref={coreRef}
-        onPointerOver={() => setHovered(true)}
+        onPointerOver={() => { setHovered(true); handleHover(); }}
         onPointerOut={() => setHovered(false)}
         onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopPropagation(); if (!globalDraggedRef.current) handleSelect(); }}
       >
@@ -712,7 +725,7 @@ function CurvedAgentEdges({ edges }: { edges: [THREE.Vector3, THREE.Vector3][] }
   );
 }
 
-function Scene({ animate, onNodeSelect }: { animate: boolean; onNodeSelect?: (agent: AgentData, sx: number, sy: number) => void }) {
+function Scene({ animate, onNodeSelect, onNodeHover }: { animate: boolean; onNodeSelect?: (agent: AgentData, sx: number, sy: number) => void; onNodeHover?: (agent: AgentData, sx: number, sy: number) => void }) {
   const agents = useAgentData();
   const [flashSet, setFlashSet] = useState<Set<number>>(new Set());
   const { scene } = useThree();
@@ -779,6 +792,7 @@ function Scene({ animate, onNodeSelect }: { animate: boolean; onNodeSelect?: (ag
           animate={animate}
           flashing={flashSet.has(i)}
           onSelect={onNodeSelect ? (sx, sy) => onNodeSelect(agent, sx, sy) : undefined}
+          onHover={onNodeHover ? (sx, sy) => onNodeHover(agent, sx, sy) : undefined}
         />
       ))}
       {animate && (
@@ -979,6 +993,8 @@ function NodePopover({
         }
       `}</style>
       <div
+        data-testid="node-popover"
+        data-agent-id={agent.id}
         style={{
           position: 'absolute',
           top: topClamped,
@@ -1236,12 +1252,19 @@ export default function NeuralGlobe({ prefersReduced }: { prefersReduced: boolea
     setSelectedNode((prev) => (prev?.agent.id === agent.id ? null : { agent, sx, sy }));
   }, []);
 
+  const handleNodeHover = useCallback((agent: AgentData, sx: number, sy: number) => {
+    if (agent.id.startsWith('ghost-')) return;
+    setSelectedNode({ agent, sx, sy });
+  }, []);
+
   const handleClose = useCallback(() => setSelectedNode(null), []);
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}
       onClick={handleClose}
+      data-hovered-agent={selectedNode?.agent.id ?? ''}
     >
+      <span data-testid="hovered-agent-id" style={{ display: 'none' }}>{selectedNode?.agent.id ?? ''}</span>
       <Canvas
         camera={{ fov: 55, near: 0.1, far: 100, position: [0, 0.4, 2.8] }}
         gl={{
@@ -1252,7 +1275,7 @@ export default function NeuralGlobe({ prefersReduced }: { prefersReduced: boolea
         }}
         dpr={[1, 2]}
       >
-        <Scene animate={animate} onNodeSelect={handleNodeSelect} />
+        <Scene animate={animate} onNodeSelect={handleNodeSelect} onNodeHover={handleNodeHover} />
         <CameraRig animate={animate} />
         <PostFX />
       </Canvas>
