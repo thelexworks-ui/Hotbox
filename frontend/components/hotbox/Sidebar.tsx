@@ -15,6 +15,15 @@ const MAX_AGENTS_VISIBLE = 8;
 
 // ── Icons ────────────────────────────────────────────────────────────────────
 
+function IconGlobe() {
+  return (
+    <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+}
+
 function IconMembers() {
   return (
     <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -186,7 +195,7 @@ function ChannelGroup({ label, channels, onItemClick }: { label: string; channel
 
 // ── Sidebar ──────────────────────────────────────────────────────────────────
 
-export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
+export function Sidebar({ onItemClick, onNeuralLink }: { onItemClick?: () => void; onNeuralLink?: () => void }) {
   const router = useRouter();
   const channels     = useHotboxStore((s) => s.channels);
   const setChannels  = useHotboxStore((s) => s.setChannels);
@@ -322,6 +331,19 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
             >
               <IconMembers />
             </button>
+            {/* Neural Link button */}
+            {onNeuralLink && (
+              <button
+                onClick={onNeuralLink}
+                title="Neural Link — organism view"
+                className="transition-colors"
+                style={{ color: 'var(--hotbox-accent)', opacity: 0.7 }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.7'; }}
+              >
+                <IconGlobe />
+              </button>
+            )}
           </div>
         </div>
 

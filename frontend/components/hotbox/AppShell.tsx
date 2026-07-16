@@ -1,12 +1,27 @@
 'use client';
 
 import React from 'react';
+import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { KeyRotationWatcher } from './KeyRotationWatcher';
 import { NotificationsProvider } from './NotificationsProvider';
 import { useWs } from './WsProvider';
 import { useKeystore } from './KeystoreProvider';
+
+const NeuralGlobe = dynamic(
+  () => import('@/app/preview/dashboard-v2/NeuralGlobe'),
+  {
+    ssr: false,
+    loading: () => (
+      <div style={{ width: '100%', height: '100%', background: '#050C14', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ color: '#5ADAEE', fontFamily: "'JetBrains Mono', monospace", fontSize: 13, opacity: 0.7, letterSpacing: '0.06em' }}>
+          Initialising neural link…
+        </span>
+      </div>
+    ),
+  }
+);
 
 function WsStatusBar() {
   const { status } = useWs();
@@ -113,6 +128,16 @@ function MobileTabBar({ onOpenDrawer }: { onOpenDrawer(): void }) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { ready } = useKeystore();
   const [mobileDrawerOpen, setMobileDrawerOpen] = React.useState(false);
+  const [showGlobe, setShowGlobe] = React.useState(false);
+  const [prefersReduced, setPrefersReduced] = React.useState(false);
+
+  React.useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setPrefersReduced(mq.matches);
+    const h = (e: MediaQueryListEvent) => setPrefersReduced(e.matches);
+    mq.addEventListener('change', h);
+    return () => mq.removeEventListener('change', h);
+  }, []);
 
   if (!ready) return <KeystoreLoadingScreen />;
 
@@ -133,7 +158,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             boxShadow: 'inset -1px 0 0 rgba(90,218,238,0.06)',
           }}
         >
-          <Sidebar />
+          <Sidebar onNeuralLink={() => setShowGlobe(true)} />
         </aside>
 
         {/* Mobile sidebar drawer */}
@@ -157,7 +182,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   ✕
                 </button>
               </div>
-              <Sidebar onItemClick={() => setMobileDrawerOpen(false)} />
+              <Sidebar onItemClick={() => setMobileDrawerOpen(false)} onNeuralLink={() => { setMobileDrawerOpen(false); setShowGlobe(true); }} />
             </aside>
           </div>
         )}
@@ -169,6 +194,36 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <MobileTabBar onOpenDrawer={() => setMobileDrawerOpen(true)} />
+
+      {showGlobe && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 60,
+            background: '#050C14',
+          }}
+        >
+          <button
+            onClick={() => setShowGlobe(false)}
+            style={{
+              position: 'absolute', top: 16, right: 20, zIndex: 10,
+              background: 'rgba(5,12,20,0.80)',
+              border: '1px solid rgba(26,74,90,0.60)',
+              borderRadius: 8,
+              color: '#5ADAEE',
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 11,
+              letterSpacing: '0.08em',
+              padding: '6px 14px',
+              cursor: 'pointer',
+              backdropFilter: 'blur(10px)',
+              textTransform: 'uppercase',
+            }}
+          >
+            ✕ Close
+          </button>
+          <NeuralGlobe prefersReduced={prefersReduced} />
+        </div>
+      )}
     </div>
   );
 }
