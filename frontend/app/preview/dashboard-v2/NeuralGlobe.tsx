@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { EffectComposer, Bloom, ChromaticAberration, Vignette } from '@react-three/postprocessing';
 import * as THREE from 'three';
@@ -1014,7 +1014,6 @@ function NodePopover({
   containerH?: number;
   onClose(): void;
 }) {
-  const router = useRouter();
   const [detail, setDetail] = useState<AgentDetail | null>(null);
   const popLeft = sx > containerW * 0.6;
   const POPOVER_W = 320;
@@ -1245,10 +1244,14 @@ function NodePopover({
 
         {/* ── Action buttons ────────────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => { router.push(`/dm/${channelId}`); onClose(); }}
+          <Link
+            href={`/dm/${channelId}`}
+            onClick={onClose}
             style={{
               flex: 1,
+              display: 'block',
+              textAlign: 'center',
+              textDecoration: 'none',
               background: '#5ADAEE',
               border: 'none',
               borderRadius: 8,
@@ -1259,17 +1262,21 @@ function NodePopover({
               padding: '9px 12px',
               cursor: 'pointer',
               boxShadow: '0 0 14px rgba(90,218,238,0.28)',
-              transition: 'box-shadow 150ms ease, opacity 150ms ease',
+              transition: 'box-shadow 150ms ease',
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 22px rgba(90,218,238,0.48)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 14px rgba(90,218,238,0.28)'; }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = '0 0 22px rgba(90,218,238,0.48)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = '0 0 14px rgba(90,218,238,0.28)'; }}
           >
             DM {agent.name}
-          </button>
-          <button
-            onClick={() => { router.push(`/dm/${channelId}?lens=profile`); onClose(); }}
+          </Link>
+          <Link
+            href={`/dm/${channelId}?lens=profile`}
+            onClick={onClose}
             style={{
               flex: 1,
+              display: 'block',
+              textAlign: 'center',
+              textDecoration: 'none',
               background: 'none',
               border: '1px solid rgba(90,218,238,0.25)',
               borderRadius: 8,
@@ -1281,18 +1288,18 @@ function NodePopover({
               transition: 'border-color 150ms ease, color 150ms ease',
             }}
             onMouseEnter={(e) => {
-              const el = e.currentTarget as HTMLButtonElement;
+              const el = e.currentTarget as HTMLAnchorElement;
               el.style.borderColor = 'rgba(90,218,238,0.50)';
               el.style.color = '#E8F4F8';
             }}
             onMouseLeave={(e) => {
-              const el = e.currentTarget as HTMLButtonElement;
+              const el = e.currentTarget as HTMLAnchorElement;
               el.style.borderColor = 'rgba(90,218,238,0.25)';
               el.style.color = 'rgba(232,244,248,0.65)';
             }}
           >
             View profile
-          </button>
+          </Link>
         </div>
       </div>
     </>
