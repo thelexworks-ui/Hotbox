@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   HOTBOX DESIGN SYSTEM — Phase 2A dark-primary
+   HOTBOX DESIGN SYSTEM — Fusion Phase 1 (deep navy + cyan/amber)
    Daedalus visual system · all tokens prefixed --hotbox-* for component compat
    Light mode opt-in via <html class="light">
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -11,50 +11,56 @@
 :root {
   color-scheme: dark;
 
-  /* ── Elevation stack (5 levels, warm brown-black) ── */
-  --hotbox-bg:           oklch(0.095 0.018 52);   /* #0E0C0A  page bg, deepest */
-  --hotbox-surface:      oklch(0.120 0.022 54);   /* #131009  sidebar, panels */
-  --hotbox-surface-2:    oklch(0.155 0.026 56);   /* #18140F  modals, raised cards */
-  --hotbox-bg-sunken:    oklch(0.075 0.015 50);   /* #09080A  inputs, code wells */
-  --hotbox-bg-raised:    oklch(0.190 0.030 58);   /* #1E1812  tooltips, dropdowns */
+  /* ── Elevation stack (deep navy) ── */
+  --hotbox-bg:           #050C14;
+  --hotbox-surface:      #0A1628;
+  --hotbox-surface-2:    #0F2040;
+  --hotbox-bg-sunken:    #030810;
+  --hotbox-bg-raised:    #0A1628;
 
   /* ── Interactive surfaces ── */
-  --hotbox-surface-hover:   oklch(0.200 0.032 58);
-  --hotbox-surface-active:  oklch(0.220 0.036 60);
-  --hotbox-selected:        oklch(0.195 0.075 72);   /* warm yellow-tint — active channel */
+  --hotbox-surface-hover:   rgba(90,218,238,0.06);
+  --hotbox-surface-active:  rgba(90,218,238,0.10);
+  --hotbox-selected:        rgba(90,218,238,0.12);
 
-  /* ── Borders ── */
-  --hotbox-border:        oklch(0.220 0.028 55);
-  --hotbox-border-strong: oklch(0.300 0.035 58);
+  /* ── Borders (teal-dark glass) ── */
+  --hotbox-border:        rgba(26,74,90,0.50);
+  --hotbox-border-strong: rgba(26,74,90,0.80);
 
-  /* ── Text ladder (all pass WCAG AA on --hotbox-bg) ── */
-  --hotbox-text:       oklch(0.970 0.006 80);   /* near-white, headings */
-  --hotbox-text-muted: oklch(0.760 0.018 75);   /* warm mid, labels */
-  --hotbox-text-dim:   oklch(0.540 0.014 70);   /* timestamps, meta — 4.7:1 */
+  /* ── Text ── */
+  --hotbox-text:       #E8F4F8;
+  --hotbox-text-muted: rgba(232,244,248,0.60);
+  --hotbox-text-dim:   rgba(232,244,248,0.35);
 
-  /* ── Accent (bright orange — 4.6:1 on bg-base) ── */
-  --hotbox-accent:        oklch(0.680 0.210 48);   /* #E07020 */
-  --hotbox-accent-hover:  oklch(0.720 0.205 50);
-  --hotbox-accent-active: oklch(0.640 0.215 46);
-  --hotbox-accent-subtle: oklch(0.175 0.065 52);   /* low-chroma wash */
+  /* ── Accent = cyan ── */
+  --hotbox-accent:        #5ADAEE;
+  --hotbox-accent-hover:  #8FE8F5;
+  --hotbox-accent-active: #1A7A8A;
+  --hotbox-accent-subtle: rgba(90,218,238,0.10);
+
+  /* ── Amber CTA (primary action buttons) ── */
+  --hotbox-amber:        #FFB830;
+  --hotbox-amber-hover:  #E8A020;
+  --hotbox-amber-fg:     #0A0800;
+  --hotbox-amber-glow:   0 0 0 3px rgba(255,184,48,0.25);
 
   /* ── Semantic ── */
-  --hotbox-online:  oklch(0.640 0.175 148);   /* vivid green */
-  --hotbox-offline: oklch(0.380 0.012 70);    /* grey */
-  --hotbox-crashed: oklch(0.640 0.220 22);    /* warm red */
-  --hotbox-mention: oklch(0.720 0.170 72);    /* amber */
+  --hotbox-online:  #4AE88A;
+  --hotbox-offline: rgba(232,244,248,0.20);
+  --hotbox-crashed: #FF4D4D;
+  --hotbox-mention: #FFB830;
 
-  /* ── Own-message bubbles ── */
-  --hotbox-yellow:    oklch(0.910 0.170 88);   /* vivid yellow */
-  --hotbox-yellow-fg: oklch(0.080 0.015 50);   /* dark on yellow — AA 13+:1 */
+  /* ── Own-message bubbles (keep existing) ── */
+  --hotbox-yellow:    #FFB830;
+  --hotbox-yellow-fg: #0A0800;
 
   /* ── Shadows ── */
-  --hotbox-shadow-sm:    0 1px 2px oklch(0 0 0 / 0.40);
-  --hotbox-shadow-md:    0 4px 12px oklch(0 0 0 / 0.50), 0 1px 3px oklch(0 0 0 / 0.30);
-  --hotbox-shadow-lg:    0 8px 24px oklch(0 0 0 / 0.60), 0 2px 6px oklch(0 0 0 / 0.40);
-  --hotbox-accent-glow:  0 0 0 3px oklch(0.680 0.210 48 / 0.20);
+  --hotbox-shadow-sm: 0 1px 2px rgba(0,0,0,0.50);
+  --hotbox-shadow-md: 0 4px 12px rgba(0,0,0,0.60), 0 1px 3px rgba(0,0,0,0.40);
+  --hotbox-shadow-lg: 0 8px 32px rgba(0,0,0,0.64), inset 0 1px 0 rgba(90,218,238,0.08);
+  --hotbox-accent-glow: 0 0 0 3px rgba(90,218,238,0.20);
 
-  /* ── Motion tokens ── */
+  /* ── Motion (unchanged) ── */
   --duration-instant: 80ms;
   --duration-fast:    150ms;
   --duration-base:    200ms;
@@ -123,7 +129,7 @@ html, body {
 body {
   background: var(--hotbox-bg);
   color: var(--hotbox-text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.375;
   -webkit-font-smoothing: antialiased;
