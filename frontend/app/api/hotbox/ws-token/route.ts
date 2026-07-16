@@ -33,10 +33,10 @@ export async function GET() {
     return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 });
   }
   const cookieStore = cookies();
-  const memberId =
-    cookieStore.get('hotbox-member-id')?.value ||
-    process.env.HOTBOX_MEMBER_ID ||
-    `user:${DEFAULT_ORG}`;
+  const memberId = cookieStore.get('hotbox-member-id')?.value;
+  if (!memberId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   const token = makeJwt(DEFAULT_ORG, memberId);
   return NextResponse.json({ token });

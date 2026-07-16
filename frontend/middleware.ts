@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Routes exempt from member-id auth (login flow + token issuance + master-key admin)
+// Routes exempt from member-id auth (login flow + master-key admin only).
+// ws-token is NOT exempt — it must see a valid member-id cookie to issue a JWT.
 const PUBLIC_API_PREFIXES = [
   '/api/hotbox/login',
-  '/api/hotbox/ws-token',
   '/api/hotbox/admin/',
 ];
 
