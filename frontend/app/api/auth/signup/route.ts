@@ -101,7 +101,8 @@ export async function POST(req: NextRequest) {
   void bootstrapWorkspace(slug);
 
   // Issue tokens
-  const accessToken = await signAccessToken({ sub: user.id, org: org.id, role: 'headmaster' });
+  const userSlug = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const accessToken = await signAccessToken({ sub: user.id, org: org.id, role: 'headmaster', member_id: userSlug });
   const rawRefresh = generateRefreshToken();
   const { error: rtErr } = await db.from('refresh_tokens').insert({
     user_id: user.id,
@@ -112,13 +113,19 @@ export async function POST(req: NextRequest) {
     console.error('[signup] refresh_token insert error:', rtErr);
   }
 
-  const userSlug = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   const res = NextResponse.json({
     token: accessToken,
     refreshToken: rawRefresh,
     user: { id: user.id, email: user.email, slug: userSlug },
     org: { id: org.id, slug: org.slug, name: org.name },
   }, { status: 201 });
+  res.cookies.set('hx_access', accessToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60,
+  });
   res.cookies.set('hx_refresh', rawRefresh, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',

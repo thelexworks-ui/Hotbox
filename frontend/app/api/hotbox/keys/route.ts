@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'node:crypto';
 import { persistenceProbe, loadChannelKey, storeChannelKey } from '@/lib/hotbox/keys-store';
+import { verifyAccessToken } from '@/lib/fusion/auth';
 
 export const runtime = 'nodejs';
 
 const DEFAULT_ORG = process.env.HOTBOX_ORG ?? 'toadsage';
 
 export async function GET(req: NextRequest) {
-  // Finding 4: identity check — must present a member-id cookie.
-  // Prevents unauthenticated key fetch. Middleware also enforces this at the edge;
-  // this is defense-in-depth at the handler layer.
-  const memberId = req.cookies.get('hotbox-member-id')?.value;
+  // Accept hx_access JWT (new auth) or legacy hotbox-member-id cookie.
+  let memberId: string | null = null;
+  const jwt = req.cookies.get('hx_access')?.value;
+  if (jwt) {
+    try { memberId = (await verifyAccessToken(jwt)).member_id ?? null; } catch { /* expired */ }
+  }
+  memberId ??= req.cookies.get('hotbox-member-id')?.value ?? null;
   if (!memberId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

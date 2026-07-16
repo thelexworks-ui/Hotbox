@@ -48,7 +48,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Org not found' }, { status: 500 });
   }
 
-  const accessToken = await signAccessToken({ sub: user.id, org: user.org_id, role: user.role });
+  const userSlug = user.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const accessToken = await signAccessToken({ sub: user.id, org: user.org_id, role: user.role, member_id: userSlug });
   const rawRefresh = generateRefreshToken();
   await db.from('refresh_tokens').insert({
     user_id: user.id,
@@ -56,12 +57,18 @@ export async function POST(req: NextRequest) {
     expires_at: refreshTokenExpiry().toISOString(),
   });
 
-  const userSlug = user.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   const res = NextResponse.json({
     token: accessToken,
     refreshToken: rawRefresh,
     user: { id: user.id, email: user.email, slug: userSlug },
     org: { id: org.id, slug: org.slug, name: org.name },
+  });
+  res.cookies.set('hx_access', accessToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60,
   });
   res.cookies.set('hx_refresh', rawRefresh, {
     httpOnly: true,
