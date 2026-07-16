@@ -68,35 +68,64 @@ function rowToMeta(row: {
 // ── Channel ops ───────────────────────────────────────────────────────────────
 
 export async function listChannels(org: string): Promise<ChannelMeta[]> {
-  const { data, error } = await db()
-    .from('hotbox_channels')
-    .select('*')
-    .eq('org_id', org)
-    .order('pinned', { ascending: false })
-    .order('created_at', { ascending: true });
+  const [channelsRes, membersRes] = await Promise.all([
+    db()
+      .from('hotbox_channels')
+      .select('*')
+      .eq('org_id', org)
+      .order('pinned', { ascending: false })
+      .order('created_at', { ascending: true }),
+    db()
+      .from('hotbox_keys')
+      .select('key_path, payload')
+      .eq('org_id', org)
+      .eq('key_type', 'members'),
+  ]);
 
-  if (error) {
-    console.error('[hotbox-channels] ERROR listing channels', { org, message: error.message, code: error.code });
+  if (channelsRes.error) {
+    console.error('[hotbox-channels] ERROR listing channels', { org, message: channelsRes.error.message, code: channelsRes.error.code });
     return [];
   }
-  return (data ?? []).map(rowToMeta);
+
+  const membersByChannel = new Map<string, string[]>();
+  for (const row of (membersRes.data ?? [])) {
+    const m = (row.payload as { members?: string[] } | null)?.members;
+    if (m) membersByChannel.set(row.key_path as string, m);
+  }
+
+  return (channelsRes.data ?? []).map((r) => ({
+    ...rowToMeta(r as Parameters<typeof rowToMeta>[0]),
+    members: membersByChannel.get(r.id) ?? [],
+  }));
 }
 
 export async function getChannelMeta(org: string, channelId: string): Promise<ChannelMeta | null> {
-  const { data, error } = await db()
-    .from('hotbox_channels')
-    .select('*')
-    .eq('org_id', org)
-    .eq('id', channelId)
-    .single();
+  const [channelRes, membersRes] = await Promise.all([
+    db()
+      .from('hotbox_channels')
+      .select('*')
+      .eq('org_id', org)
+      .eq('id', channelId)
+      .single(),
+    db()
+      .from('hotbox_keys')
+      .select('payload')
+      .eq('org_id', org)
+      .eq('key_type', 'members')
+      .eq('key_path', channelId)
+      .maybeSingle(),
+  ]);
 
-  if (error) {
-    if (error.code !== 'PGRST116') {
-      console.error('[hotbox-channels] ERROR getting channel meta', { org, channelId, message: error.message });
+  if (channelRes.error) {
+    if (channelRes.error.code !== 'PGRST116') {
+      console.error('[hotbox-channels] ERROR getting channel meta', { org, channelId, message: channelRes.error.message });
     }
     return null;
   }
-  return data ? rowToMeta(data as Parameters<typeof rowToMeta>[0]) : null;
+  if (!channelRes.data) return null;
+
+  const members = (membersRes.data?.payload as { members?: string[] } | null)?.members ?? [];
+  return { ...rowToMeta(channelRes.data as Parameters<typeof rowToMeta>[0]), members };
 }
 
 export async function channelExists(org: string, channelId: string): Promise<boolean> {
