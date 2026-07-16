@@ -212,4 +212,11 @@ body {
   .hotbox-msg-in {
     animation: message-in var(--duration-base) var(--ease-out) both;
   }
+
+  /* Composer placeholder — JetBrains Mono mono aesthetic */
+  .composer-input::placeholder {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    opacity: 0.6;
+  }
 }
