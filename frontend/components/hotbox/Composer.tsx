@@ -33,6 +33,7 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
   const reconcilePending = useHotboxStore((s) => s.reconcilePending);
   const removeMessage = useHotboxStore((s) => s.removeMessage);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
   const pendingRef = useRef<Map<string, HotboxMessage>>(new Map());
@@ -167,19 +168,34 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
   return (
     <div className="px-4 pb-4">
       <div
+        ref={containerRef}
         className={[
           'flex items-end gap-2 rounded-xl px-3 py-2',
-          'border border-[var(--hotbox-border)] bg-[var(--hotbox-bg-sunken)]',
+          'border bg-[var(--hotbox-bg-sunken)]',
           isDisabled ? 'opacity-60' : '',
         ].join(' ')}
-        style={!isDisabled ? { transition: `border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out)` } : undefined}
+        style={{
+          borderColor: 'rgba(26,74,90,0.50)',
+          transition: `border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out)`,
+        }}
+        onFocus={() => {
+          if (isDisabled || !containerRef.current) return;
+          containerRef.current.style.borderColor = 'rgba(90,218,238,0.55)';
+          containerRef.current.style.boxShadow   = '0 0 0 1px rgba(90,218,238,0.18)';
+        }}
+        onBlur={() => {
+          if (!containerRef.current) return;
+          containerRef.current.style.borderColor = 'rgba(26,74,90,0.50)';
+          containerRef.current.style.boxShadow   = '';
+        }}
       >
         <textarea
           ref={textareaRef}
           data-testid="composer-input"
           rows={1}
-          className="flex-1 resize-none bg-transparent outline-none text-sm text-[var(--hotbox-text)] placeholder:text-[var(--hotbox-text-dim)] max-h-40 overflow-y-auto hotbox-scrollbar"
+          className="composer-input flex-1 resize-none bg-transparent outline-none text-sm text-[var(--hotbox-text)] placeholder:text-[var(--hotbox-text-dim)] max-h-40 overflow-y-auto hotbox-scrollbar"
           placeholder={placeholder}
+          style={{ fontFamily: 'inherit' }}
           value={text}
           disabled={isDisabled}
           onChange={(e) => {
@@ -200,13 +216,14 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
           className={[
             'flex-shrink-0 rounded-lg px-2.5 py-1.5 text-sm font-semibold transition-all',
             text.trim() && !isDisabled
-              ? 'bg-[var(--hotbox-accent)] text-white'
+              ? 'text-[var(--hotbox-amber-fg)]'
               : 'bg-[var(--hotbox-border)] text-[var(--hotbox-text-dim)] cursor-not-allowed',
           ].join(' ')}
           style={text.trim() && !isDisabled ? {
+            background: 'var(--hotbox-amber)',
             transition: `background var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out)`,
           } : undefined}
-          onMouseEnter={(e) => { if (text.trim() && !isDisabled) (e.currentTarget as HTMLButtonElement).style.boxShadow = 'var(--hotbox-accent-glow)'; }}
+          onMouseEnter={(e) => { if (text.trim() && !isDisabled) (e.currentTarget as HTMLButtonElement).style.boxShadow = 'var(--hotbox-amber-glow)'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = ''; }}
           onClick={handleSend}
           disabled={!text.trim() || isDisabled}
@@ -214,6 +231,18 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
           ↑
         </button>
       </div>
+      <div
+        style={{
+          height: 1,
+          marginTop: -1,
+          borderRadius: '0 0 12px 12px',
+          background: 'rgba(90,218,238,0.55)',
+          transition: 'transform var(--duration-base) var(--ease-out), opacity var(--duration-fast) var(--ease-out)',
+          transformOrigin: 'left center',
+          transform: text.trim() ? 'scaleX(1)' : 'scaleX(0)',
+          opacity: text.trim() ? 1 : 0,
+        }}
+      />
       {status !== 'open' && (
         <p className="text-[11px] text-[var(--hotbox-mention)] mt-1 px-1">
           WS {status} — messages routing via HTTP

@@ -126,7 +126,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <aside
           data-testid="sidebar"
           className="hidden md:flex flex-col flex-shrink-0 w-60 border-r border-[var(--hotbox-border)]"
-          style={{ background: 'var(--hotbox-surface)' }}
+          style={{
+            background: 'var(--hotbox-surface)',
+            backdropFilter: 'blur(10px)',
+            borderRightColor: 'rgba(26,74,90,0.60)',
+            boxShadow: 'inset -1px 0 0 rgba(90,218,238,0.06)',
+          }}
         >
           <Sidebar />
         </aside>

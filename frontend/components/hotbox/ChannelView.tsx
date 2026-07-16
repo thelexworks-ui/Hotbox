@@ -69,7 +69,17 @@ function MessageRow({ msg }: { msg: AnyMessage }) {
   return (
     <div className={['px-4 py-1 hover:bg-[var(--hotbox-surface-hover)] group rounded transition-colors hotbox-msg-in', isPending ? 'opacity-60' : ''].join(' ')}>
       <div className="flex items-baseline gap-2 mb-0.5">
-        <span className="font-semibold text-sm text-[var(--hotbox-text)]">{msg.sender_id}</span>
+        {(() => {
+          const isAgent = !msg.sender_id.includes(' ') && !['lex', 'alexa'].includes(msg.sender_id.toLowerCase());
+          return (
+            <span
+              className="font-semibold text-sm"
+              style={{ color: isAgent ? 'var(--hotbox-accent)' : 'var(--hotbox-text)' }}
+            >
+              {msg.sender_id}
+            </span>
+          );
+        })()}
         <span className="text-[11px] text-[var(--hotbox-text-dim)]">{formatTime(msg.ts)}</span>
         {isPending && <span className="text-[11px] text-[var(--hotbox-text-dim)] italic">sending…</span>}
       </div>
@@ -221,7 +231,11 @@ export function ChannelView({ channelId, isDm }: Props) {
       {/* Header */}
       <div
         className="flex items-center gap-3 px-4 py-3 border-b border-[var(--hotbox-border-strong)] flex-shrink-0"
-        style={{ background: 'var(--hotbox-bg)' }}
+        style={{
+          background: 'rgba(5,12,20,0.72)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+        }}
       >
         <span className="font-semibold text-sm text-[var(--hotbox-text)]">
           {isDm ? '' : '#'}{channel?.name.replace(/^#/, '') ?? channelId}
