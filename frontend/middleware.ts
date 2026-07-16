@@ -11,22 +11,24 @@ const PUBLIC_API_PREFIXES = [
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // API guard (Findings 6+7): all /api/hotbox/* require a member-id cookie except
-  // login/token/admin paths. Returns 401 so the client can redirect to /login.
+  // Accept either legacy invite-code cookie or new JWT cookie for auth.
+  // Signature verification is deferred to route handlers (Node runtime); middleware
+  // only checks presence so it can run on Edge without jose latency per request.
+  const memberId  = req.cookies.get('hotbox-member-id')?.value;
+  const jwtAccess = req.cookies.get('hx_access')?.value;
+  const authed    = !!(memberId || jwtAccess);
+
+  // API guard: all /api/hotbox/* require auth except login/admin/internal paths.
   if (pathname.startsWith('/api/hotbox/')) {
     const isPublic = PUBLIC_API_PREFIXES.some((p) => pathname.startsWith(p));
-    if (!isPublic) {
-      const memberId = req.cookies.get('hotbox-member-id')?.value;
-      if (!memberId) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
+    if (!isPublic && !authed) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     return NextResponse.next();
   }
 
   // Page guard: channel + DM pages require auth → redirect to /login
-  const memberId = req.cookies.get('hotbox-member-id')?.value;
-  if (!memberId) {
+  if (!authed) {
     const loginUrl = new URL('/login', req.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
