@@ -316,8 +316,8 @@ function CoreClusterNode({
   animate: boolean;
 }) {
   const coreRef   = useRef<THREE.Mesh>(null);
-  const inner1Ref = useRef<THREE.Mesh>(null);
-  const inner2Ref = useRef<THREE.Mesh>(null);
+  const inner1Ref = useRef<THREE.Sprite>(null);
+  const inner2Ref = useRef<THREE.Sprite>(null);
 
   const haloTex = useMemo(() => makeSoftCircle(), []);
 
@@ -348,10 +348,10 @@ function CoreClusterNode({
       <sprite scale={[0.22, 0.22, 1]}>
         <spriteMaterial map={haloTex} color={color} transparent opacity={0.55} blending={THREE.AdditiveBlending} depthWrite={false} />
       </sprite>
-      <sprite ref={inner1Ref as React.RefObject<THREE.Sprite>} scale={[0.70, 0.70, 1]}>
+      <sprite ref={inner1Ref} scale={[0.70, 0.70, 1]}>
         <spriteMaterial map={haloTex} color={color} transparent opacity={0.35} blending={THREE.AdditiveBlending} depthWrite={false} />
       </sprite>
-      <sprite ref={inner2Ref as React.RefObject<THREE.Sprite>} scale={[1.60, 1.60, 1]}>
+      <sprite ref={inner2Ref} scale={[1.60, 1.60, 1]}>
         <spriteMaterial map={haloTex} color={color} transparent opacity={0.12} blending={THREE.AdditiveBlending} depthWrite={false} />
       </sprite>
     </group>
