@@ -80,6 +80,23 @@ export async function storeChannelKey(org: string, channelId: string, ckBase64: 
   }
 }
 
+export async function storeChannelMembers(org: string, channelId: string, members: string[]): Promise<void> {
+  const { error } = await db()
+    .from('hotbox_keys')
+    .upsert({
+      org_id: org,
+      key_type: 'members',
+      key_path: channelId,
+      payload: { members },
+      updated_at: new Date().toISOString(),
+    });
+
+  if (error) {
+    console.error('[hotbox-keys] ERROR storing channel members', { org, channelId, message: error.message });
+    throw error;
+  }
+}
+
 export async function loadChannelKey(org: string, channelId: string): Promise<string | null> {
   const { data, error } = await db()
     .from('hotbox_keys')

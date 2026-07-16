@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { listChannels, createChannel, bootstrapWorkspace } from '@/lib/hotbox/channel-service';
 import { validateMasterKey } from '@/lib/hotbox/master-key';
 import { randomBytes } from 'node:crypto';
-import { storeChannelKey } from '@/lib/hotbox/keys-store';
+import { storeChannelKey, storeChannelMembers } from '@/lib/hotbox/keys-store';
 
 export const runtime = 'nodejs';
 
@@ -29,10 +29,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { org = DEFAULT_ORG, name, type, topic, members } = body as {
-    org?: string; name: string; type: string; topic?: string; members?: string[];
+  const body = await req.json() as {
+    org?: string; name: string; type: string; topic?: string;
+    members?: string[]; memberIds?: string[];
   };
+  const { org = DEFAULT_ORG, name, type, topic } = body;
+  // Modal sends memberIds; server-to-server callers may send members — accept both
+  const memberList = body.memberIds ?? body.members ?? [];
 
   if (!name || !type) return NextResponse.json({ error: 'name and type required' }, { status: 400 });
 
@@ -41,7 +44,7 @@ export async function POST(req: NextRequest) {
     name,
     type: type as 'system' | 'agent' | 'topic' | 'dm',
     topic,
-    members,
+    members: memberList,
   });
 
   if (!channel) return NextResponse.json({ error: 'channel already exists or create failed' }, { status: 409 });
@@ -50,6 +53,11 @@ export async function POST(req: NextRequest) {
   // hits a missing-key gap. The GET self-heal is a fallback, not the happy path.
   const ck = randomBytes(32).toString('base64');
   await storeChannelKey(org, channel.id, ck);
+
+  // Persist membership so adapters can discover this channel via hotbox_keys
+  if (memberList.length > 0) {
+    await storeChannelMembers(org, channel.id, memberList);
+  }
 
   return NextResponse.json(channel, { status: 201 });
 }
