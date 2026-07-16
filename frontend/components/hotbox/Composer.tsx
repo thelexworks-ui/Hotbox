@@ -113,37 +113,28 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
       appendMessage(channelId, optimistic);
       pendingRef.current.set(nonce, optimistic);
 
-      // Check live readyState, not stale React status — WS may drop between renders
-      const wsSent = send({
-        type: 'msg.send',
-        channel_id: channelId,
-        crypto_envelope: envelope,
-        nonce,
-        ...(threadParentId ? { thread_id: threadParentId } : {}),
+      // Always persist via HTTP POST → Supabase (durable). WS-first was volatile:
+      // Railway ws-server writes JSONL only, not Supabase, so messages vanished on reload.
+      // WS remains for RECEIVING (msg.new, typing) — not for sending.
+      // Railway fanout from the HTTP route handler delivers live updates to other subscribers.
+      const res = await fetch(`/api/hotbox/channels/${channelId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          crypto_envelope: envelope,
+          sender_id: memberId,
+          ...(threadParentId ? { thread_parent_id: threadParentId } : {}),
+        }),
       });
-
-      if (!wsSent) {
-        // WS not OPEN (disconnected or closing) — fall through to HTTP
-        const res = await fetch(`/api/hotbox/channels/${channelId}/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            crypto_envelope: envelope,
-            sender_id: memberId,
-            ...(threadParentId ? { thread_parent_id: threadParentId } : {}),
-          }),
-        });
-        pendingRef.current.delete(nonce);
-        if (res.ok) {
-          const confirmed = await res.json() as HotboxMessage;
-          // Preserve plaintext from the optimistic so MessageRow shows it directly
-          // without requiring a decrypt round-trip (same as the msg.ack WS path).
-          reconcilePending(channelId, nonce, { ...confirmed, _text: trimmed, _pending: false });
-        } else {
-          // HTTP also failed — retract optimistic message rather than leaving it stuck
-          removeMessage(channelId, nonce);
-          throw new Error(`HTTP send failed: ${res.status}`);
-        }
+      pendingRef.current.delete(nonce);
+      if (res.ok) {
+        const confirmed = await res.json() as HotboxMessage;
+        // Preserve plaintext from the optimistic so MessageRow shows it directly
+        // without requiring a decrypt round-trip.
+        reconcilePending(channelId, nonce, { ...confirmed, _text: trimmed, _pending: false });
+      } else {
+        removeMessage(channelId, nonce);
+        throw new Error(`HTTP send failed: ${res.status}`);
       }
 
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
@@ -160,7 +151,7 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
     } finally {
       setSending(false);
     }
-  }, [text, isDisabled, encrypt, send, channelId, threadParentId, memberId, appendMessage, reconcilePending, removeMessage, emitTyping]);
+  }, [text, isDisabled, encrypt, channelId, threadParentId, memberId, appendMessage, reconcilePending, removeMessage, emitTyping]);
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -170,8 +161,7 @@ export function Composer({ channelId, threadParentId, disabled }: Props) {
   }
 
   const placeholder =
-    !keystoreReady    ? 'Keystore initialising…' :
-    status !== 'open' ? `#${channelId} (sending via HTTP…)` :
+    !keystoreReady ? 'Keystore initialising…' :
     `Message #${channelId}`;
 
   return (
