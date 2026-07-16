@@ -36,15 +36,29 @@ export function RoleBadge({ role }: { role: 'orchestrator' | 'headmaster' }) {
 
 export function MemberAvatar({ member, size = 32 }: { member: Member; size?: number }) {
   const isAgent = member.role !== 'user';
+  const isHM    = member.role === 'headmaster';
+  const isOrch  = member.role === 'orchestrator';
+
+  const bg    = isHM ? 'rgba(255,215,0,0.12)' : isAgent ? 'var(--hotbox-accent-subtle)' : 'var(--hotbox-border)';
+  const color = isHM ? '#FFD700'              : isAgent ? 'var(--hotbox-accent)'         : 'var(--hotbox-text-muted)';
+  const glow  = isHM
+    ? '0 0 0 1.5px rgba(255,215,0,0.55), 0 0 12px rgba(255,215,0,0.20)'
+    : isOrch
+    ? '0 0 0 1.5px rgba(248,254,255,0.35), 0 0 10px rgba(248,254,255,0.12)'
+    : isAgent
+    ? '0 0 0 1.5px rgba(90,218,238,0.45), 0 0 10px rgba(90,218,238,0.15)'
+    : 'none';
+
   return (
     <div
-      className="rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden text-xs font-semibold"
+      className="flex items-center justify-center flex-shrink-0 overflow-hidden text-xs font-semibold"
       style={{
         width: size,
         height: size,
-        background: isAgent ? 'var(--hotbox-accent-subtle)' : 'var(--hotbox-border)',
-        color: isAgent ? 'var(--hotbox-accent)' : 'var(--hotbox-text-muted)',
+        background: bg,
+        color,
         borderRadius: isAgent ? 6 : size / 2,
+        boxShadow: glow,
       }}
     >
       {isAgent ? (
@@ -161,7 +175,9 @@ export function MembersPanel({ open, onClose, initialFilter = 'all' }: Props) {
         className="hidden md:flex flex-col fixed right-0 top-0 h-full z-40 border-l"
         style={{
           width: 280,
-          background: 'var(--hotbox-bg-raised)',
+          background: 'rgba(10,22,40,0.92)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
           borderColor: 'var(--hotbox-border-strong)',
           boxShadow: 'var(--hotbox-shadow-lg)',
           transform: open ? 'translateX(0)' : 'translateX(100%)',
@@ -192,7 +208,9 @@ export function MembersPanel({ open, onClose, initialFilter = 'all' }: Props) {
           <div
             className="flex flex-col rounded-t-xl border-t"
             style={{
-              background: 'var(--hotbox-bg-raised)',
+              background: 'rgba(10,22,40,0.92)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
               borderColor: 'var(--hotbox-border-strong)',
               boxShadow: 'var(--hotbox-shadow-lg)',
               maxHeight: '95vh',
@@ -301,8 +319,8 @@ function PanelContent({ onClose, search, setSearch, filter, setFilter, online, o
 
         {online.length > 0 && (
           <>
-            <div className="px-4 py-1 sticky top-0" style={{ background: 'var(--hotbox-bg-raised)' }}>
-              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--hotbox-text-dim)' }}>
+            <div className="px-4 py-1 sticky top-0" style={{ background: 'rgba(10,22,40,0.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
+              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--hotbox-text-dim)', fontFamily: "'JetBrains Mono', monospace" }}>
                 Online — {online.length}
               </span>
             </div>
@@ -320,8 +338,8 @@ function PanelContent({ onClose, search, setSearch, filter, setFilter, online, o
 
         {offline.length > 0 && (
           <>
-            <div className="px-4 py-1 sticky top-0" style={{ background: 'var(--hotbox-bg-raised)' }}>
-              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--hotbox-text-dim)' }}>
+            <div className="px-4 py-1 sticky top-0" style={{ background: 'rgba(10,22,40,0.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
+              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--hotbox-text-dim)', fontFamily: "'JetBrains Mono', monospace" }}>
                 Offline — {offline.length}
               </span>
             </div>

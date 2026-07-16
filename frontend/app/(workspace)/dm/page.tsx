@@ -22,12 +22,16 @@ function PresenceDot({ status }: { status: PresenceStatus }) {
 
 function RolePill({ role }: { role: Member['role'] }) {
   if (role === 'headmaster') return (
-    <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded"
-      style={{ background: 'var(--hotbox-mention)', color: '#fff' }}>HM</span>
+    <span
+      className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+      style={{ background: 'rgba(255,215,0,0.14)', color: '#FFD700', fontFamily: "'JetBrains Mono', monospace" }}
+    >HM</span>
   );
   if (role === 'orchestrator') return (
-    <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded"
-      style={{ background: 'var(--hotbox-accent)', color: '#fff' }}>ORC</span>
+    <span
+      className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+      style={{ background: 'var(--hotbox-accent-subtle)', color: 'var(--hotbox-accent)', fontFamily: "'JetBrains Mono', monospace" }}
+    >ORC</span>
   );
   return null;
 }
@@ -93,8 +97,12 @@ export default function DmInboxPage() {
     <div className="flex flex-col h-full" style={{ background: 'var(--hotbox-bg)' }}>
       {/* Header */}
       <div
-        className="flex items-center px-4 py-3 border-b border-[var(--hotbox-border)] flex-shrink-0"
-        style={{ background: 'var(--hotbox-surface)' }}
+        className="flex items-center px-4 py-3 border-b border-[var(--hotbox-border-strong)] flex-shrink-0"
+        style={{
+          background: 'rgba(5,12,20,0.72)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+        }}
       >
         <h1 className="font-semibold text-sm text-[var(--hotbox-text)]">Direct Messages</h1>
         {dms.length > 0 && (
@@ -121,18 +129,33 @@ export default function DmInboxPage() {
                     href={`/dm/${memberId}`}
                     className="flex items-center gap-3 px-4 py-2.5 hover:bg-[var(--hotbox-surface-2)] transition-colors"
                   >
-                    {/* Avatar placeholder */}
-                    <div
-                      className="relative flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold select-none"
-                      style={{ background: 'var(--hotbox-surface-2)', color: 'var(--hotbox-text-muted)' }}
-                    >
-                      {displayName.charAt(0).toUpperCase()}
-                      {/* Presence dot overlaid bottom-right */}
-                      <span className="absolute bottom-0 right-0 p-0.5 rounded-full"
-                        style={{ background: 'var(--hotbox-bg)' }}>
-                        <PresenceDot status={status} />
-                      </span>
-                    </div>
+                    {/* Avatar with role halo */}
+                    {(() => {
+                      const isAgent = !!member && member.role !== 'user';
+                      const isHM    = member?.role === 'headmaster';
+                      const isOrch  = member?.role === 'orchestrator';
+                      const haloBg  = isHM ? 'rgba(255,215,0,0.12)' : isAgent ? 'var(--hotbox-accent-subtle)' : 'var(--hotbox-surface-2)';
+                      const haloClr = isHM ? '#FFD700' : isAgent ? 'var(--hotbox-accent)' : 'var(--hotbox-text-muted)';
+                      const haloRing = isHM
+                        ? '0 0 0 1.5px rgba(255,215,0,0.60), 0 0 12px rgba(255,215,0,0.25)'
+                        : isOrch
+                        ? '0 0 0 1.5px rgba(248,254,255,0.40), 0 0 12px rgba(248,254,255,0.15)'
+                        : isAgent
+                        ? '0 0 0 1.5px rgba(90,218,238,0.50), 0 0 12px rgba(90,218,238,0.20)'
+                        : 'none';
+                      return (
+                        <div
+                          className="relative flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold select-none"
+                          style={{ background: haloBg, color: haloClr, boxShadow: haloRing }}
+                        >
+                          {displayName.charAt(0).toUpperCase()}
+                          <span className="absolute bottom-0 right-0 p-0.5 rounded-full"
+                            style={{ background: 'var(--hotbox-bg)' }}>
+                            <PresenceDot status={status} />
+                          </span>
+                        </div>
+                      );
+                    })()}
 
                     {/* Name + meta */}
                     <div className="flex-1 min-w-0">

@@ -99,6 +99,61 @@ function MessageRow({ msg }: { msg: AnyMessage }) {
   );
 }
 
+function DmHeader({ memberId }: { memberId: string }) {
+  const presence = useHotboxStore((s) => s.presence);
+  const channels = useHotboxStore((s) => s.channels);
+  const channel  = channels.find((c) => c.id.includes(memberId));
+  const name     = channel?.agent_name ?? memberId;
+  const isAgent  = !!channel?.agent_name;
+  const isOrch   = channel?.agent_role === 'orchestrator' || name === 'boss';
+  const isHM     = name === 'lex' || name === 'alexa';
+  const statusKey = channel?.agent_name ?? memberId;
+  const status    = (presence[statusKey] ?? presence[memberId] ?? 'offline') as 'online' | 'crashed' | 'offline';
+  const haloColor = isHM   ? 'rgba(255,215,0,0.55)'
+    : isOrch ? 'rgba(248,254,255,0.45)'
+    : isAgent ? 'rgba(90,218,238,0.45)'
+    : 'rgba(232,244,248,0.20)';
+  const statusColor = status === 'online' ? 'var(--hotbox-online)' : status === 'crashed' ? 'var(--hotbox-crashed)' : 'var(--hotbox-offline)';
+  return (
+    <div
+      className="flex items-center gap-3 px-4 py-2.5 border-b border-[var(--hotbox-border-strong)] flex-shrink-0"
+      style={{ background: 'rgba(5,12,20,0.72)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
+    >
+      <div
+        className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold select-none"
+        style={{
+          background: isAgent ? 'var(--hotbox-accent-subtle)' : 'var(--hotbox-border)',
+          color: isAgent ? 'var(--hotbox-accent)' : 'var(--hotbox-text-muted)',
+          boxShadow: `0 0 0 1.5px ${haloColor}, 0 0 10px ${haloColor}`,
+        }}
+      >
+        {name.charAt(0).toUpperCase()}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span className="font-semibold text-sm text-[var(--hotbox-text)] truncate">{name}</span>
+          {(isOrch || isHM) && (
+            <span
+              className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded flex-shrink-0"
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                background: isHM ? 'rgba(255,215,0,0.12)' : 'var(--hotbox-accent-subtle)',
+                color: isHM ? '#FFD700' : 'var(--hotbox-accent)',
+              }}
+            >
+              {isHM ? 'headmaster' : 'orch'}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className="inline-block rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: statusColor }} />
+          <span className="text-[10px]" style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--hotbox-text-dim)' }}>{status}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TypingIndicator({ channelId }: { channelId: string }) {
   const typingUsers = useHotboxStore((s) => s.typingUsers[channelId] ?? EMPTY_TYPING);
   if (typingUsers.length === 0) return <div className="h-5" />;
@@ -229,27 +284,31 @@ export function ChannelView({ channelId, isDm }: Props) {
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--hotbox-bg)' }}>
       {/* Header */}
-      <div
-        className="flex items-center gap-3 px-4 py-3 border-b border-[var(--hotbox-border-strong)] flex-shrink-0"
-        style={{
-          background: 'rgba(5,12,20,0.72)',
-          backdropFilter: 'blur(10px)',
-          WebkitBackdropFilter: 'blur(10px)',
-        }}
-      >
-        <span className="font-semibold text-sm text-[var(--hotbox-text)]">
-          {isDm ? '' : '#'}{channel?.name.replace(/^#/, '') ?? channelId}
-        </span>
-        {channel?.topic && (
-          <>
-            <div className="w-px h-4 bg-[var(--hotbox-border)]" />
-            <span className="text-xs text-[var(--hotbox-text-muted)] truncate">{channel.topic}</span>
-          </>
-        )}
-        <div data-testid="member-count" className="ml-auto text-xs text-[var(--hotbox-text-dim)]">
-          {memberCount} {memberCount === 1 ? 'member' : 'members'}
+      {isDm ? (
+        <DmHeader memberId={channelId.replace(/^dm-[^-]+-/, '')} />
+      ) : (
+        <div
+          className="flex items-center gap-3 px-4 py-3 border-b border-[var(--hotbox-border-strong)] flex-shrink-0"
+          style={{
+            background: 'rgba(5,12,20,0.72)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+          }}
+        >
+          <span className="font-semibold text-sm text-[var(--hotbox-text)]">
+            #{channel?.name.replace(/^#/, '') ?? channelId}
+          </span>
+          {channel?.topic && (
+            <>
+              <div className="w-px h-4 bg-[var(--hotbox-border)]" />
+              <span className="text-xs text-[var(--hotbox-text-muted)] truncate">{channel.topic}</span>
+            </>
+          )}
+          <div data-testid="member-count" className="ml-auto text-xs text-[var(--hotbox-text-dim)]">
+            {memberCount} {memberCount === 1 ? 'member' : 'members'}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Message list */}
       <div className="flex-1 min-h-0">
