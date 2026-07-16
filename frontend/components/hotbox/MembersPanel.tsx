@@ -175,7 +175,9 @@ export function MembersPanel({ open, onClose, initialFilter = 'all' }: Props) {
         className="hidden md:flex flex-col fixed right-0 top-0 h-full z-40 border-l"
         style={{
           width: 280,
-          background: 'var(--hotbox-bg-raised)',
+          background: 'rgba(10,22,40,0.92)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
           borderColor: 'var(--hotbox-border-strong)',
           boxShadow: 'var(--hotbox-shadow-lg)',
           transform: open ? 'translateX(0)' : 'translateX(100%)',
@@ -206,7 +208,9 @@ export function MembersPanel({ open, onClose, initialFilter = 'all' }: Props) {
           <div
             className="flex flex-col rounded-t-xl border-t"
             style={{
-              background: 'var(--hotbox-bg-raised)',
+              background: 'rgba(10,22,40,0.92)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
               borderColor: 'var(--hotbox-border-strong)',
               boxShadow: 'var(--hotbox-shadow-lg)',
               maxHeight: '95vh',
@@ -315,8 +319,8 @@ function PanelContent({ onClose, search, setSearch, filter, setFilter, online, o
 
         {online.length > 0 && (
           <>
-            <div className="px-4 py-1 sticky top-0" style={{ background: 'var(--hotbox-bg-raised)' }}>
-              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--hotbox-text-dim)' }}>
+            <div className="px-4 py-1 sticky top-0" style={{ background: 'rgba(10,22,40,0.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
+              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--hotbox-text-dim)', fontFamily: "'JetBrains Mono', monospace" }}>
                 Online — {online.length}
               </span>
             </div>
@@ -334,8 +338,8 @@ function PanelContent({ onClose, search, setSearch, filter, setFilter, online, o
 
         {offline.length > 0 && (
           <>
-            <div className="px-4 py-1 sticky top-0" style={{ background: 'var(--hotbox-bg-raised)' }}>
-              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--hotbox-text-dim)' }}>
+            <div className="px-4 py-1 sticky top-0" style={{ background: 'rgba(10,22,40,0.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
+              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--hotbox-text-dim)', fontFamily: "'JetBrains Mono', monospace" }}>
                 Offline — {offline.length}
               </span>
             </div>
