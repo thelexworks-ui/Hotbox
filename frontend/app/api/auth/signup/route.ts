@@ -9,6 +9,7 @@ import {
   generateApiToken,
   generateAgentPassword,
 } from '@/lib/fusion/auth';
+import { bootstrapWorkspace } from '@/lib/hotbox/channel-service';
 
 export const runtime = 'nodejs';
 
@@ -95,6 +96,9 @@ export async function POST(req: NextRequest) {
 
   // Create member_page for headmaster agent
   await db.from('member_pages').insert({ agent_id: agent.id, display_name: name });
+
+  // Bootstrap workspace channels (creates #general + #alerts) and sync headmaster into #general
+  void bootstrapWorkspace(slug);
 
   // Issue tokens
   const accessToken = await signAccessToken({ sub: user.id, org: org.id, role: 'headmaster' });

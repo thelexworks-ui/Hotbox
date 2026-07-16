@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import type { AegisEnvelope, AnyMessage, HotboxMessage, SystemMessage } from './types';
-import { storeChannelKey } from './keys-store';
+import { storeChannelKey, storeChannelMembers, getChannelMembers } from './keys-store';
 
 // ── Singleton client ──────────────────────────────────────────────────────────
 
@@ -145,11 +145,60 @@ export async function createChannel(params: CreateChannelParams): Promise<Channe
   return data ? rowToMeta(data as Parameters<typeof rowToMeta>[0]) : null;
 }
 
+// ── #general invariant ────────────────────────────────────────────────────────
+
+async function getOrgRoster(org: string): Promise<string[]> {
+  // Canonical: look up org UUID from slug, then query Slice A tables
+  const { data: orgRow } = await db().from('orgs').select('id').eq('slug', org).maybeSingle();
+  if (orgRow?.id) {
+    const [agentsRes, usersRes] = await Promise.all([
+      db().from('agent_accounts').select('name').eq('org_id', orgRow.id),
+      db().from('users').select('email').eq('org_id', orgRow.id),
+    ]);
+    const names = (agentsRes.data ?? []).map((r: { name: string }) => r.name);
+    const slugs = (usersRes.data ?? []).map((r: { email: string }) =>
+      r.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    );
+    const canonical = [...new Set([...names, ...slugs])];
+    if (canonical.length > 0) return canonical;
+  }
+
+  // Fallback: union all hotbox_keys members records for this org
+  const { data: allMembers } = await db()
+    .from('hotbox_keys')
+    .select('payload')
+    .eq('org_id', org)
+    .eq('key_type', 'members');
+  const fallback = new Set<string>();
+  for (const row of (allMembers ?? [])) {
+    for (const m of ((row.payload as { members?: string[] } | null)?.members ?? [])) {
+      fallback.add(m);
+    }
+  }
+  return [...fallback];
+}
+
+export async function syncGeneralWithRoster(org: string): Promise<void> {
+  const [roster, current] = await Promise.all([
+    getOrgRoster(org),
+    getChannelMembers(org, 'general'),
+  ]);
+  if (roster.length === 0) return;
+  if (current.length < roster.length) {
+    console.warn('[hotbox-channels] #general members < org roster', { org, generalCount: current.length, rosterCount: roster.length, missing: roster.filter((m) => !current.includes(m)) });
+  }
+  const merged = [...new Set([...current, ...roster])];
+  if (merged.length !== current.length) {
+    await storeChannelMembers(org, 'general', merged);
+  }
+}
+
 export async function bootstrapWorkspace(org: string): Promise<void> {
   await Promise.all([
     createChannel({ org, name: 'general', type: 'system', pinned: true, topic: 'General discussion', members: [] }),
     createChannel({ org, name: 'alerts', type: 'system', pinned: true, topic: 'System alerts, watchdog events, cron notifications', members: [] }),
   ]);
+  void syncGeneralWithRoster(org);
 }
 
 export async function createAgentChannel(params: { org: string; agentName: string; agentRole?: AgentRole }): Promise<ChannelMeta | null> {

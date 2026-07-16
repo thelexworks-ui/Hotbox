@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/fusion/supabase';
 import { verifyAccessToken, hashPassword, generateApiToken, generateAgentPassword } from '@/lib/fusion/auth';
+import { addMemberToGeneral } from '@/lib/hotbox/keys-store';
 
 export const runtime = 'nodejs';
 
@@ -84,6 +85,9 @@ export async function POST(req: NextRequest) {
     console.error('[agents/create] member_pages insert error:', mpErr);
     return NextResponse.json({ error: 'Failed to create member page — agent creation rolled back' }, { status: 500 });
   }
+
+  // Add new agent to #general — fire-and-forget, non-blocking
+  void addMemberToGeneral(org.slug, agentName);
 
   return NextResponse.json({ agentId: agent.id, apiToken, email }, { status: 201 });
 }

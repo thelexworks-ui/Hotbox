@@ -97,6 +97,26 @@ export async function storeChannelMembers(org: string, channelId: string, member
   }
 }
 
+export async function getChannelMembers(org: string, channelId: string): Promise<string[]> {
+  const { data, error } = await db()
+    .from('hotbox_keys')
+    .select('payload')
+    .eq('org_id', org)
+    .eq('key_type', 'members')
+    .eq('key_path', channelId)
+    .single();
+  if (error && error.code !== 'PGRST116') {
+    console.error('[hotbox-keys] ERROR loading channel members', { org, channelId, message: error.message });
+  }
+  return (data?.payload as { members?: string[] } | null)?.members ?? [];
+}
+
+export async function addMemberToGeneral(org: string, memberId: string): Promise<void> {
+  const current = await getChannelMembers(org, 'general');
+  if (current.includes(memberId)) return;
+  await storeChannelMembers(org, 'general', [...current, memberId]);
+}
+
 export async function loadChannelKey(org: string, channelId: string): Promise<string | null> {
   const { data, error } = await db()
     .from('hotbox_keys')
