@@ -34,6 +34,7 @@ export interface ChannelMeta {
   created_at: string;
   topic?: string;
   members: string[];
+  has_ck?: boolean;
 }
 
 export interface CreateChannelParams {
@@ -68,7 +69,7 @@ function rowToMeta(row: {
 // ── Channel ops ───────────────────────────────────────────────────────────────
 
 export async function listChannels(org: string): Promise<ChannelMeta[]> {
-  const [channelsRes, membersRes] = await Promise.all([
+  const [channelsRes, membersRes, ckRes] = await Promise.all([
     db()
       .from('hotbox_channels')
       .select('*')
@@ -80,6 +81,11 @@ export async function listChannels(org: string): Promise<ChannelMeta[]> {
       .select('key_path, payload')
       .eq('org_id', org)
       .eq('key_type', 'members'),
+    db()
+      .from('hotbox_keys')
+      .select('key_path')
+      .eq('org_id', org)
+      .eq('key_type', 'ck'),
   ]);
 
   if (channelsRes.error) {
@@ -93,14 +99,17 @@ export async function listChannels(org: string): Promise<ChannelMeta[]> {
     if (m) membersByChannel.set(row.key_path as string, m);
   }
 
+  const ckSet = new Set<string>((ckRes.data ?? []).map((r) => r.key_path as string));
+
   return (channelsRes.data ?? []).map((r) => ({
     ...rowToMeta(r as Parameters<typeof rowToMeta>[0]),
     members: membersByChannel.get(r.id) ?? [],
+    has_ck: ckSet.has(r.id),
   }));
 }
 
 export async function getChannelMeta(org: string, channelId: string): Promise<ChannelMeta | null> {
-  const [channelRes, membersRes] = await Promise.all([
+  const [channelRes, membersRes, ckRes] = await Promise.all([
     db()
       .from('hotbox_channels')
       .select('*')
@@ -114,6 +123,13 @@ export async function getChannelMeta(org: string, channelId: string): Promise<Ch
       .eq('key_type', 'members')
       .eq('key_path', channelId)
       .maybeSingle(),
+    db()
+      .from('hotbox_keys')
+      .select('key_path')
+      .eq('org_id', org)
+      .eq('key_type', 'ck')
+      .eq('key_path', channelId)
+      .maybeSingle(),
   ]);
 
   if (channelRes.error) {
@@ -125,7 +141,7 @@ export async function getChannelMeta(org: string, channelId: string): Promise<Ch
   if (!channelRes.data) return null;
 
   const members = (membersRes.data?.payload as { members?: string[] } | null)?.members ?? [];
-  return { ...rowToMeta(channelRes.data as Parameters<typeof rowToMeta>[0]), members };
+  return { ...rowToMeta(channelRes.data as Parameters<typeof rowToMeta>[0]), members, has_ck: ckRes.data !== null };
 }
 
 export async function channelExists(org: string, channelId: string): Promise<boolean> {

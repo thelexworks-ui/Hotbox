@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/fusion/supabase';
 import { listChannels } from '@/lib/hotbox/channel-service';
+import { presenceMap } from '@/lib/hotbox/presence';
 
 export const runtime = 'nodejs';
 
@@ -85,18 +86,10 @@ export async function GET(
     } catch {}
   }
 
-  // Last active — null if heartbeats absent
-  let lastActiveMsAgo: number | null = null;
-  if (agentDbId) {
-    try {
-      const { data: hb } = await db
-        .from('heartbeats')
-        .select('updated_at')
-        .eq('agent_id', agentDbId)
-        .maybeSingle();
-      if (hb?.updated_at) lastActiveMsAgo = Date.now() - new Date(hb.updated_at).getTime();
-    } catch {}
-  }
+  // Last active — derived from in-memory presenceMap (no heartbeats table in DB).
+  // 'online' → 0ms ago; anything else → null (unknown).
+  const presence = presenceMap.get(id);
+  const lastActiveMsAgo: number | null = presence === 'online' ? 0 : null;
 
   return NextResponse.json({
     id,
