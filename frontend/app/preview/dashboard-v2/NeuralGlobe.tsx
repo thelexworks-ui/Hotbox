@@ -714,7 +714,7 @@ function CameraRig({ animate }: { animate: boolean }) {
 
   useFrame((_, delta) => {
     if (!autoRef.current || !animate) return;
-    thetaRef.current += 0.010 * delta;
+    thetaRef.current += 0.018 * delta;
     const r = Math.sqrt(camera.position.x ** 2 + camera.position.z ** 2);
     camera.position.x = r * Math.sin(thetaRef.current);
     camera.position.z = r * Math.cos(thetaRef.current);
