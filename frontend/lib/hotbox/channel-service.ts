@@ -159,7 +159,7 @@ async function getOrgRoster(org: string): Promise<string[]> {
     const slugs = (usersRes.data ?? []).map((r: { email: string }) =>
       r.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
     );
-    const canonical = [...new Set([...names, ...slugs])];
+    const canonical = [...names, ...slugs].filter((v, i, a) => a.indexOf(v) === i);
     if (canonical.length > 0) return canonical;
   }
 
@@ -169,13 +169,13 @@ async function getOrgRoster(org: string): Promise<string[]> {
     .select('payload')
     .eq('org_id', org)
     .eq('key_type', 'members');
-  const fallback = new Set<string>();
+  const fallback: string[] = [];
   for (const row of (allMembers ?? [])) {
     for (const m of ((row.payload as { members?: string[] } | null)?.members ?? [])) {
-      fallback.add(m);
+      if (!fallback.includes(m)) fallback.push(m);
     }
   }
-  return [...fallback];
+  return fallback;
 }
 
 export async function syncGeneralWithRoster(org: string): Promise<void> {
@@ -187,7 +187,7 @@ export async function syncGeneralWithRoster(org: string): Promise<void> {
   if (current.length < roster.length) {
     console.warn('[hotbox-channels] #general members < org roster', { org, generalCount: current.length, rosterCount: roster.length, missing: roster.filter((m) => !current.includes(m)) });
   }
-  const merged = [...new Set([...current, ...roster])];
+  const merged = [...current, ...roster].filter((v, i, a) => a.indexOf(v) === i);
   if (merged.length !== current.length) {
     await storeChannelMembers(org, 'general', merged);
   }
