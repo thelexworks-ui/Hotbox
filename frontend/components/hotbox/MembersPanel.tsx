@@ -36,15 +36,29 @@ export function RoleBadge({ role }: { role: 'orchestrator' | 'headmaster' }) {
 
 export function MemberAvatar({ member, size = 32 }: { member: Member; size?: number }) {
   const isAgent = member.role !== 'user';
+  const isHM    = member.role === 'headmaster';
+  const isOrch  = member.role === 'orchestrator';
+
+  const bg    = isHM ? 'rgba(255,215,0,0.12)' : isAgent ? 'var(--hotbox-accent-subtle)' : 'var(--hotbox-border)';
+  const color = isHM ? '#FFD700'              : isAgent ? 'var(--hotbox-accent)'         : 'var(--hotbox-text-muted)';
+  const glow  = isHM
+    ? '0 0 0 1.5px rgba(255,215,0,0.55), 0 0 12px rgba(255,215,0,0.20)'
+    : isOrch
+    ? '0 0 0 1.5px rgba(248,254,255,0.35), 0 0 10px rgba(248,254,255,0.12)'
+    : isAgent
+    ? '0 0 0 1.5px rgba(90,218,238,0.45), 0 0 10px rgba(90,218,238,0.15)'
+    : 'none';
+
   return (
     <div
-      className="rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden text-xs font-semibold"
+      className="flex items-center justify-center flex-shrink-0 overflow-hidden text-xs font-semibold"
       style={{
         width: size,
         height: size,
-        background: isAgent ? 'var(--hotbox-accent-subtle)' : 'var(--hotbox-border)',
-        color: isAgent ? 'var(--hotbox-accent)' : 'var(--hotbox-text-muted)',
+        background: bg,
+        color,
         borderRadius: isAgent ? 6 : size / 2,
+        boxShadow: glow,
       }}
     >
       {isAgent ? (
