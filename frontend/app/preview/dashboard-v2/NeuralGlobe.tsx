@@ -384,14 +384,16 @@ function CommandChainEdges({ agentPositions }: { agentPositions: THREE.Vector3[]
 }
 
 function AgentNodeMesh({
-  position, agent, animate, flashing, onSelect, onHover,
+  position, agent, animate, flashing, onSelect, hitMeshRef, onPointerEnter, onPointerLeave,
 }: {
   position: THREE.Vector3;
   agent: AgentData;
   animate: boolean;
   flashing: boolean;
   onSelect?: (sx: number, sy: number) => void;
-  onHover?: (sx: number, sy: number) => void;
+  hitMeshRef?: (el: THREE.Mesh | null) => void;
+  onPointerEnter?: () => void;
+  onPointerLeave?: () => void;
 }) {
   const coreRef  = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
@@ -410,12 +412,6 @@ function AgentNodeMesh({
     const [sx, sy] = projectToScreen();
     onSelect(sx, sy);
   }, [projectToScreen, onSelect]);
-
-  const handleHover = useCallback(() => {
-    if (!onHover) return;
-    const [sx, sy] = projectToScreen();
-    onHover(sx, sy);
-  }, [projectToScreen, onHover]);
 
   useEffect(() => {
     document.body.style.cursor = hovered && onSelect ? 'pointer' : 'auto';
@@ -445,10 +441,11 @@ function AgentNodeMesh({
 
   return (
     <group position={position.toArray() as [number, number, number]}>
+      {/* Visual sphere */}
       <mesh
         ref={coreRef}
-        onPointerOver={() => { setHovered(true); handleHover(); }}
-        onPointerOut={() => setHovered(false)}
+        onPointerOver={() => { setHovered(true); onPointerEnter?.(); }}
+        onPointerOut={() => { setHovered(false); onPointerLeave?.(); }}
         onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopPropagation(); if (!globalDraggedRef.current) handleSelect(); }}
       >
         <sphereGeometry args={[0.028, 12, 12]} />
@@ -457,6 +454,12 @@ function AgentNodeMesh({
           blending={THREE.AdditiveBlending}
           depthWrite={false}
         />
+      </mesh>
+
+      {/* Invisible hit sphere — 0.10 radius (3.6× visual) for reliable pointer detection */}
+      <mesh ref={hitMeshRef}>
+        <sphereGeometry args={[0.10, 8, 8]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
       {haloOp > 0 && (
@@ -697,6 +700,55 @@ function useAgentData(): AgentData[] {
 // â”€â”€ Scene â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
+// ── RaycastPointerHandler — manual hit-detection against enlarged invisible spheres ──
+
+function RaycastPointerHandler({
+  hitMeshes,
+  agents,
+  onHover,
+}: {
+  hitMeshes: React.MutableRefObject<(THREE.Mesh | null)[]>;
+  agents: AgentData[];
+  onHover?: (agent: AgentData, sx: number, sy: number) => void;
+}) {
+  const { camera, gl, size } = useThree();
+  const raycaster = useMemo(() => new THREE.Raycaster(), []);
+
+  useEffect(() => {
+    if (!onHover) return;
+    const canvas = gl.domElement;
+
+    const handleMove = (evt: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const ndcX = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+      const ndcY = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
+
+      const meshList = hitMeshes.current.filter((m): m is THREE.Mesh => m !== null);
+      const hits = raycaster.intersectObjects(meshList, false);
+      console.debug('[neuro-ray] meshes:', meshList.length, 'hits:', hits.length, 'ndc:', ndcX.toFixed(3), ndcY.toFixed(3));
+
+      if (hits.length > 0) {
+        const hitIdx = meshList.indexOf(hits[0].object as THREE.Mesh);
+        const agent = agents[hitIdx];
+        if (agent && !agent.id.startsWith('ghost-')) {
+          const worldPos = new THREE.Vector3();
+          hits[0].object.getWorldPosition(worldPos);
+          worldPos.project(camera);
+          const sx = (worldPos.x * 0.5 + 0.5) * size.width;
+          const sy = (-(worldPos.y * 0.5) + 0.5) * size.height;
+          onHover(agent, sx, sy);
+        }
+      }
+    };
+
+    canvas.addEventListener('pointermove', handleMove);
+    return () => canvas.removeEventListener('pointermove', handleMove);
+  }, [camera, gl, raycaster, hitMeshes, agents, onHover, size]);
+
+  return null;
+}
+
 // -- Agent-to-agent curved bezier edges -----------------------------------------
 
 function CurvedAgentEdges({ edges }: { edges: [THREE.Vector3, THREE.Vector3][] }) {
@@ -729,6 +781,7 @@ function Scene({ animate, onNodeSelect, onNodeHover }: { animate: boolean; onNod
   const agents = useAgentData();
   const [flashSet, setFlashSet] = useState<Set<number>>(new Set());
   const { scene } = useThree();
+  const hitMeshRefs = useRef<(THREE.Mesh | null)[]>([]);
 
   useEffect(() => { scene.background = new THREE.Color(P.bg); }, [scene]);
 
@@ -792,9 +845,14 @@ function Scene({ animate, onNodeSelect, onNodeHover }: { animate: boolean; onNod
           animate={animate}
           flashing={flashSet.has(i)}
           onSelect={onNodeSelect ? (sx, sy) => onNodeSelect(agent, sx, sy) : undefined}
-          onHover={onNodeHover ? (sx, sy) => onNodeHover(agent, sx, sy) : undefined}
+          hitMeshRef={(el) => { hitMeshRefs.current[i] = el; }}
         />
       ))}
+      <RaycastPointerHandler
+        hitMeshes={hitMeshRefs}
+        agents={agents.slice(0, agentPositions.length)}
+        onHover={onNodeHover}
+      />
       {animate && (
         <PacketLayer edges={edges} nucleusPositions={nucleusNearby} animate={animate} />
       )}
