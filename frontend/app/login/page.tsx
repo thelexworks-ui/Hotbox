@@ -1,35 +1,48 @@
 'use client';
 
 import React, { Suspense, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+
+const FIELD_STYLE: React.CSSProperties = {
+  background: 'var(--hotbox-surface-2)',
+  border: '1px solid var(--hotbox-border)',
+  borderRadius: 6,
+  padding: '8px 10px',
+  fontSize: 14,
+  color: 'var(--hotbox-text)',
+  outline: 'none',
+  width: '100%',
+  boxSizing: 'border-box',
+};
 
 const WORKSPACE = process.env.NEXT_PUBLIC_HOTBOX_WORKSPACE_NAME || 'Optimus';
 
 function LoginForm() {
-  const searchParams = useSearchParams();
-  const [code, setCode] = useState(searchParams.get('code') ?? 'HOTBOXBETA');
-  const [name, setName] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const nameRef = useRef<HTMLInputElement>(null);
+  const searchParams  = useSearchParams();
+  const [email,       setEmail]       = useState('');
+  const [password,    setPassword]    = useState('');
+  const [error,       setError]       = useState<string | null>(null);
+  const [loading,     setLoading]     = useState(false);
+  const [showInvite,  setShowInvite]  = useState(false);
+  const [inviteCode,  setInviteCode]  = useState(searchParams.get('code') ?? '');
+  const [guestName,   setGuestName]   = useState('');
+  const emailRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (searchParams.get('code')) nameRef.current?.focus();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { emailRef.current?.focus(); }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleEmailLogin(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch('/api/hotbox/login', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, name }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
-      const data = await res.json() as { error?: string; ok?: boolean };
+      const data = await res.json() as { error?: string };
       if (!res.ok) { setError(data.error ?? 'Login failed'); return; }
-      // Full navigation so AuthProvider re-fetches /api/hotbox/me with the new cookie
       window.location.href = searchParams.get('redirect') ?? '/channels/general';
     } catch {
       setError('Network error — please try again');
@@ -38,7 +51,28 @@ function LoginForm() {
     }
   }
 
-  const disabled = loading || !code.trim() || !name.trim();
+  async function handleInviteLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch('/api/hotbox/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: inviteCode, name: guestName }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { setError(data.error ?? 'Login failed'); return; }
+      window.location.href = searchParams.get('redirect') ?? '/channels/general';
+    } catch {
+      setError('Network error — please try again');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const emailDisabled  = loading || !email.trim() || !password;
+  const inviteDisabled = loading || !inviteCode.trim() || !guestName.trim();
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--hotbox-bg)' }}>
@@ -53,68 +87,120 @@ function LoginForm() {
         boxShadow: '0 24px 64px rgba(0,0,0,0.64), 0 4px 16px rgba(90,218,238,0.06)',
       }}>
         <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4, color: 'var(--hotbox-text)' }}>
-          Join {WORKSPACE} on Hotbox
+          Sign in to {WORKSPACE}
         </h1>
         <p style={{ fontSize: 13, color: 'var(--hotbox-text-muted)', marginBottom: 24 }}>
-          Enter your invite code and pick a display name.
+          {showInvite ? 'Enter your invite code to join as a guest.' : 'Welcome back.'}
         </p>
-        <form data-testid="login-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label htmlFor="login-code" style={{ fontSize: 12, fontWeight: 500, color: 'var(--hotbox-text-dim)' }}>Invite code</label>
-            <input
-              id="login-code"
-              name="code"
-              data-testid="login-code"
-              type="text"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="Invite code"
-              autoComplete="off"
-              required
-              style={{ background: 'var(--hotbox-surface-2)', border: '1px solid var(--hotbox-border)', borderRadius: 6, padding: '8px 10px', fontSize: 14, color: 'var(--hotbox-text)', outline: 'none', fontFamily: 'monospace', letterSpacing: '0.05em', width: '100%', boxSizing: 'border-box' }}
-            />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label htmlFor="login-name" style={{ fontSize: 12, fontWeight: 500, color: 'var(--hotbox-text-dim)' }}>Your name</label>
-            <input
-              ref={nameRef}
-              id="login-name"
-              name="name"
-              data-testid="login-name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Lex"
-              autoComplete="nickname"
-              required
-              style={{ background: 'var(--hotbox-surface-2)', border: '1px solid var(--hotbox-border)', borderRadius: 6, padding: '8px 10px', fontSize: 14, color: 'var(--hotbox-text)', outline: 'none', width: '100%', boxSizing: 'border-box' }}
-            />
-          </div>
-          {error && (
-            <p data-testid="login-error" style={{ fontSize: 13, color: 'var(--hotbox-mention)', marginTop: -4 }}>{error}</p>
-          )}
+
+        {!showInvite ? (
+          <form onSubmit={handleEmailLogin} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--hotbox-text-dim)' }}>Email</label>
+              <input
+                ref={emailRef}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+                required
+                style={FIELD_STYLE}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--hotbox-text-dim)' }}>Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                autoComplete="current-password"
+                required
+                style={FIELD_STYLE}
+              />
+            </div>
+            {error && (
+              <p data-testid="login-error" style={{ fontSize: 13, color: 'var(--hotbox-crashed)', marginTop: -4 }}>{error}</p>
+            )}
+            <button
+              type="submit"
+              data-testid="login-submit"
+              disabled={emailDisabled}
+              style={{
+                background: emailDisabled ? 'var(--hotbox-border)' : 'var(--hotbox-amber)',
+                color: emailDisabled ? 'var(--hotbox-text-dim)' : 'var(--hotbox-amber-fg)',
+                border: 'none', borderRadius: 7, padding: '11px', fontSize: 14, fontWeight: 600,
+                cursor: emailDisabled ? 'not-allowed' : 'pointer', marginTop: 4,
+                width: '100%', boxSizing: 'border-box' as const, transition: 'background 150ms ease-out',
+              }}
+            >
+              {loading ? 'Signing in…' : 'Sign in'}
+            </button>
+          </form>
+        ) : (
+          <form data-testid="login-form" onSubmit={handleInviteLogin} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--hotbox-text-dim)' }}>Invite code</label>
+              <input
+                type="text"
+                data-testid="login-code"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value)}
+                placeholder="Invite code"
+                autoComplete="off"
+                required
+                style={{ ...FIELD_STYLE, fontFamily: 'monospace', letterSpacing: '0.05em' }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--hotbox-text-dim)' }}>Your name</label>
+              <input
+                type="text"
+                data-testid="login-name"
+                value={guestName}
+                onChange={(e) => setGuestName(e.target.value)}
+                placeholder="e.g. Lex"
+                autoComplete="nickname"
+                required
+                style={FIELD_STYLE}
+              />
+            </div>
+            {error && (
+              <p data-testid="login-error" style={{ fontSize: 13, color: 'var(--hotbox-crashed)', marginTop: -4 }}>{error}</p>
+            )}
+            <button
+              type="submit"
+              data-testid="login-submit"
+              disabled={inviteDisabled}
+              style={{
+                background: inviteDisabled ? 'var(--hotbox-border)' : 'var(--hotbox-amber)',
+                color: inviteDisabled ? 'var(--hotbox-text-dim)' : 'var(--hotbox-amber-fg)',
+                border: 'none', borderRadius: 7, padding: '11px', fontSize: 14, fontWeight: 600,
+                cursor: inviteDisabled ? 'not-allowed' : 'pointer', marginTop: 4,
+                width: '100%', boxSizing: 'border-box' as const, transition: 'background 150ms ease-out',
+              }}
+            >
+              {loading ? 'Joining…' : 'Join'}
+            </button>
+          </form>
+        )}
+
+        <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
           <button
-            type="submit"
-            data-testid="login-submit"
-            disabled={disabled}
-            style={{
-              background: disabled ? 'var(--hotbox-border)' : 'var(--hotbox-amber)',
-              color: disabled ? 'var(--hotbox-text-dim)' : 'var(--hotbox-amber-fg)',
-              border: 'none',
-              borderRadius: 7,
-              padding: '11px',
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: disabled ? 'not-allowed' : 'pointer',
-              marginTop: 4,
-              width: '100%',
-              boxSizing: 'border-box' as const,
-              transition: 'background 150ms ease-out',
-            }}
+            type="button"
+            onClick={() => { setShowInvite(!showInvite); setError(null); }}
+            style={{ fontSize: 12, color: 'var(--hotbox-text-dim)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
           >
-            {loading ? 'Joining…' : 'Join'}
+            {showInvite ? '← Sign in with email' : 'Have an invite code?'}
           </button>
-        </form>
+          <p style={{ fontSize: 13, color: 'var(--hotbox-text-dim)', margin: 0 }}>
+            New here?{' '}
+            <Link href="/signup" style={{ color: 'var(--hotbox-accent)', textDecoration: 'none' }}>
+              Create a workspace
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );
