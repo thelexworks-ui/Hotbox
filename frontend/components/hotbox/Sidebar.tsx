@@ -43,12 +43,21 @@ function PresenceDot({ status, size = 8 }: { status: PresenceStatus; size?: numb
   const color =
     status === 'online'  ? 'var(--hotbox-online)'  :
     status === 'crashed' ? 'var(--hotbox-crashed)' : 'var(--hotbox-offline)';
+  const isOnline = status === 'online';
   const pulse = status === 'online' || status === 'crashed';
   return (
-    <span
-      className="inline-block rounded-full flex-shrink-0"
-      style={{ width: size, height: size, background: color, animation: pulse ? 'pulse-dot 2s ease-in-out infinite' : undefined }}
-    />
+    <span className="relative inline-flex flex-shrink-0 items-center justify-center" style={{ width: size, height: size }}>
+      {isOnline && (
+        <span
+          className="absolute inset-0 rounded-full"
+          style={{ background: color, opacity: 0.4, animation: 'presence-pulse 2s var(--ease-standard) infinite' }}
+        />
+      )}
+      <span
+        className="rounded-full"
+        style={{ width: size, height: size, background: color, animation: (!isOnline && pulse) ? 'pulse-dot 2s ease-in-out infinite' : undefined, position: 'relative' }}
+      />
+    </span>
   );
 }
 

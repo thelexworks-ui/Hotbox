@@ -133,8 +133,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               onClick={() => setMobileDrawerOpen(false)}
             />
             <aside
-              className="relative z-10 flex flex-col w-72 h-full shadow-2xl border-r border-[var(--hotbox-border)]"
-              style={{ background: 'var(--hotbox-surface)' }}
+              className="relative z-10 flex flex-col w-72 h-full border-r border-[var(--hotbox-border)]"
+              style={{ background: 'var(--hotbox-surface)', boxShadow: 'var(--hotbox-shadow-lg)' }}
             >
               <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--hotbox-border)]">
                 <span className="font-semibold text-sm text-[var(--hotbox-text)]">Menu</span>
