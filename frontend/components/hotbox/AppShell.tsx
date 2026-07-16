@@ -80,8 +80,8 @@ function MobileTabBar({ onOpenDrawer }: { onOpenDrawer(): void }) {
 
   return (
     <nav
-      className="md:hidden flex items-stretch fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--hotbox-border)]"
-      style={{ height: 64, background: 'var(--hotbox-surface)' }}
+      className="md:hidden flex items-stretch fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--hotbox-border-strong)]"
+      style={{ height: 64, background: 'var(--hotbox-bg-raised)', boxShadow: '0 -4px 16px oklch(0 0 0 / 0.40)' }}
       data-testid="mobile-tab-bar"
     >
       {TABS.map((tab) => {
@@ -92,11 +92,17 @@ function MobileTabBar({ onOpenDrawer }: { onOpenDrawer(): void }) {
           <button
             key={tab.action}
             onClick={() => handleTab(tab.action)}
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 text-[var(--hotbox-text-muted)] active:opacity-70"
-            style={active ? { color: 'var(--hotbox-accent)' } : undefined}
+            className="flex-1 relative flex flex-col items-center justify-center gap-1 min-h-[44px] transition-colors"
+            style={{ color: active ? 'var(--hotbox-accent)' : 'var(--hotbox-text-muted)' }}
           >
             <span className="text-xl leading-none">{tab.icon}</span>
-            <span className="text-[10px] font-medium leading-none">{tab.label}</span>
+            <span className="text-[10px] font-semibold leading-none tracking-wide">{tab.label}</span>
+            {active && (
+              <span
+                className="absolute bottom-0 rounded-t-full"
+                style={{ width: 24, height: 2, background: 'var(--hotbox-accent)', left: '50%', transform: 'translateX(-50%)' }}
+              />
+            )}
           </button>
         );
       })}
@@ -129,7 +135,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {mobileDrawerOpen && (
           <div className="md:hidden fixed inset-0 z-50 flex">
             <div
-              className="absolute inset-0 bg-black/40"
+              className="absolute inset-0 hotbox-backdrop"
               onClick={() => setMobileDrawerOpen(false)}
             />
             <aside
