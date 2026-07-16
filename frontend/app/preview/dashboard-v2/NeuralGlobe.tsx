@@ -326,12 +326,12 @@ function CoreClusterNode({
     const t = clock.elapsedTime;
     const pulse = 0.5 + 0.5 * Math.sin(t * (Math.PI * 2 / 3));
     if (inner1Ref.current) {
-      const m = inner1Ref.current.material as THREE.MeshBasicMaterial;
+      const m = inner1Ref.current.material as THREE.SpriteMaterial;
       m.opacity = 0.35 + pulse * 0.20;
       inner1Ref.current.scale.setScalar(1 + pulse * 0.06);
     }
     if (inner2Ref.current) {
-      const m2 = inner2Ref.current.material as THREE.MeshBasicMaterial;
+      const m2 = inner2Ref.current.material as THREE.SpriteMaterial;
       m2.opacity = 0.12 + pulse * 0.08;
       inner2Ref.current.scale.setScalar(1 + pulse * 0.12);
     }
