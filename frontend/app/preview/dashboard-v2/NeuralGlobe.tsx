@@ -301,6 +301,83 @@ function OrgNucleus({ animate }: { animate: boolean }) {
 
 // â”€â”€ Agent node â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+// ── Core cluster: Headmaster + Orchestrator at r≈0.15 ────────────────────────
+
+const CORE_NODES = [
+  { pos: new THREE.Vector3( 0.08,  0.07,  0.04), color: 0xFFD700, label: 'Headmaster'  },
+  { pos: new THREE.Vector3(-0.08, -0.06, -0.04), color: 0xF8FEFF, label: 'Orchestrator' },
+] as const;
+
+function CoreClusterNode({
+  pos, color, animate,
+}: {
+  pos: THREE.Vector3;
+  color: number;
+  animate: boolean;
+}) {
+  const coreRef   = useRef<THREE.Mesh>(null);
+  const inner1Ref = useRef<THREE.Sprite>(null);
+  const inner2Ref = useRef<THREE.Sprite>(null);
+
+  const haloTex = useMemo(() => makeSoftCircle(), []);
+
+  useFrame(({ clock }) => {
+    if (!animate) return;
+    const t = clock.elapsedTime;
+    const pulse = 0.5 + 0.5 * Math.sin(t * (Math.PI * 2 / 3));
+    if (inner1Ref.current) {
+      const m = inner1Ref.current.material as THREE.SpriteMaterial;
+      m.opacity = 0.35 + pulse * 0.20;
+      inner1Ref.current.scale.setScalar(1 + pulse * 0.06);
+    }
+    if (inner2Ref.current) {
+      const m2 = inner2Ref.current.material as THREE.SpriteMaterial;
+      m2.opacity = 0.12 + pulse * 0.08;
+      inner2Ref.current.scale.setScalar(1 + pulse * 0.12);
+    }
+  });
+
+  const posArr = pos.toArray() as [number, number, number];
+
+  return (
+    <group position={posArr}>
+      <mesh ref={coreRef}>
+        <sphereGeometry args={[0.020, 12, 12]} />
+        <meshBasicMaterial color={color} blending={THREE.AdditiveBlending} depthWrite={false} />
+      </mesh>
+      <sprite scale={[0.22, 0.22, 1]}>
+        <spriteMaterial map={haloTex} color={color} transparent opacity={0.55} blending={THREE.AdditiveBlending} depthWrite={false} />
+      </sprite>
+      <sprite ref={inner1Ref} scale={[0.70, 0.70, 1]}>
+        <spriteMaterial map={haloTex} color={color} transparent opacity={0.35} blending={THREE.AdditiveBlending} depthWrite={false} />
+      </sprite>
+      <sprite ref={inner2Ref} scale={[1.60, 1.60, 1]}>
+        <spriteMaterial map={haloTex} color={color} transparent opacity={0.12} blending={THREE.AdditiveBlending} depthWrite={false} />
+      </sprite>
+    </group>
+  );
+}
+
+function CommandChainEdges({ agentPositions }: { agentPositions: THREE.Vector3[] }) {
+  const geometry = useMemo(() => {
+    const pts: number[] = [];
+    for (const node of CORE_NODES) {
+      for (const agentPos of agentPositions) {
+        pts.push(node.pos.x, node.pos.y, node.pos.z, agentPos.x, agentPos.y, agentPos.z);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    return g;
+  }, [agentPositions]);
+
+  return (
+    <lineSegments geometry={geometry}>
+      <lineBasicMaterial color={0xFFD700} transparent opacity={0.07} blending={THREE.AdditiveBlending} depthWrite={false} />
+    </lineSegments>
+  );
+}
+
 function AgentNodeMesh({
   position, agent, animate, flashing, onSelect,
 }: {
@@ -680,6 +757,10 @@ function Scene({ animate, onNodeSelect }: { animate: boolean; onNodeSelect?: (ag
       <NativeStars radius={17} count={2400} factor={0.8} />
       <BokehLayer animate={animate} />
       <OrgNucleus animate={animate} />
+      {CORE_NODES.map((n) => (
+        <CoreClusterNode key={n.label} pos={n.pos} color={n.color} animate={animate} />
+      ))}
+      <CommandChainEdges agentPositions={agentPositions} />
       <IcosphereWireframe edges={edges} nucleusPositions={nucleusNearby} />
       <CurvedAgentEdges edges={agentEdges} />
       {agents.slice(0, agentPositions.length).map((agent, i) => (
@@ -714,7 +795,7 @@ function CameraRig({ animate }: { animate: boolean }) {
 
   useFrame((_, delta) => {
     if (!autoRef.current || !animate) return;
-    thetaRef.current += 0.010 * delta;
+    thetaRef.current += 0.018 * delta;
     const r = Math.sqrt(camera.position.x ** 2 + camera.position.z ** 2);
     camera.position.x = r * Math.sin(thetaRef.current);
     camera.position.z = r * Math.cos(thetaRef.current);
@@ -941,6 +1022,40 @@ export default function NeuralGlobe({ prefersReduced }: { prefersReduced: boolea
         pointerEvents: 'none', userSelect: 'none',
       }}>
         {ORG} Â· neural link v2
+      </div>
+
+      {/* Headmaster + Orchestrator labels — pinned near canvas center */}
+      <div style={{
+        position: 'absolute',
+        top: 'calc(50% - 22px)',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        pointerEvents: 'none',
+        userSelect: 'none',
+        textAlign: 'center',
+        lineHeight: 1.2,
+      }}>
+        <div style={{
+          fontSize: 9,
+          fontFamily: "'JetBrains Mono', monospace",
+          color: '#FFD700',
+          letterSpacing: '0.10em',
+          textTransform: 'uppercase',
+          textShadow: '0 0 8px rgba(255,215,0,0.80)',
+          marginBottom: 2,
+        }}>
+          HEADMASTER
+        </div>
+        <div style={{
+          fontSize: 9,
+          fontFamily: "'JetBrains Mono', monospace",
+          color: '#C8F0FF',
+          letterSpacing: '0.10em',
+          textTransform: 'uppercase',
+          textShadow: '0 0 8px rgba(90,218,238,0.80)',
+        }}>
+          ORCHESTRATOR
+        </div>
       </div>
 
       {prefersReduced && (
