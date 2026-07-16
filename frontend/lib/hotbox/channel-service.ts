@@ -140,6 +140,9 @@ export async function createChannel(params: CreateChannelParams): Promise<Channe
     // intentional — channel row exists regardless; getCK on first send will hard-fail
     // with a 404 if this write loses a race, surfacing the error to the user.
     void storeChannelKey(params.org, channelId, crypto.randomBytes(32).toString('base64'));
+    if (params.members && params.members.length > 0) {
+      void storeChannelMembers(params.org, channelId, params.members);
+    }
   }
 
   return data ? rowToMeta(data as Parameters<typeof rowToMeta>[0]) : null;
