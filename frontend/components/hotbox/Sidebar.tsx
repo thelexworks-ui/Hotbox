@@ -106,7 +106,10 @@ function RoleSection({
   if (members.length === 0 && !overflow) return null;
   return (
     <div className="mb-1">
-      <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--hotbox-text-dim)]">
+      <div
+        className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--hotbox-text-dim)]"
+        style={{ fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em' }}
+      >
         {label}
       </div>
       {members.length === 0 ? (
@@ -170,7 +173,10 @@ function ChannelGroup({ label, channels, onItemClick }: { label: string; channel
   if (channels.length === 0) return null;
   return (
     <div className="mb-1">
-      <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--hotbox-text-dim)]">
+      <div
+        className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--hotbox-text-dim)]"
+        style={{ fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em' }}
+      >
         {label}
       </div>
       {channels.map((ch) => <ChannelItem key={ch.id} channel={ch} onItemClick={onItemClick} />)}
@@ -292,7 +298,11 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
       >
         {/* Workspace header */}
         <div className="px-4 py-2 mb-2 flex items-center justify-between border-b border-[var(--hotbox-border-strong)]">
-          <span data-testid="workspace-label" className="font-semibold text-sm text-[var(--hotbox-text)] truncate">
+          <span
+            data-testid="workspace-label"
+            className="font-semibold text-sm text-[var(--hotbox-text)] truncate"
+            style={{ textShadow: '0 0 14px rgba(90,218,238,0.45)' }}
+          >
             {WORKSPACE_NAME}
           </span>
           <div className="flex items-center gap-2">
