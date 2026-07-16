@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listChannels, createChannel, bootstrapWorkspace } from '@/lib/hotbox/channel-service';
 import { validateMasterKey } from '@/lib/hotbox/master-key';
+import { randomBytes } from 'node:crypto';
+import { storeChannelKey } from '@/lib/hotbox/keys-store';
 
 export const runtime = 'nodejs';
 
@@ -43,5 +45,11 @@ export async function POST(req: NextRequest) {
   });
 
   if (!channel) return NextResponse.json({ error: 'channel already exists or create failed' }, { status: 409 });
+
+  // Atomic CK generation: store the channel key immediately so the first send never
+  // hits a missing-key gap. The GET self-heal is a fallback, not the happy path.
+  const ck = randomBytes(32).toString('base64');
+  await storeChannelKey(org, channel.id, ck);
+
   return NextResponse.json(channel, { status: 201 });
 }

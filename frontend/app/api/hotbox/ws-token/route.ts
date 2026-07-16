@@ -4,7 +4,9 @@ import crypto from 'crypto';
 
 export const runtime = 'nodejs';
 
-const JWT_SECRET = process.env.HOTBOX_JWT_SECRET ?? 'dev-secret-change-in-prod';
+// Validated at server startup via instrumentation.ts — guaranteed non-null here.
+// Handler-level guard below is defense-in-depth.
+const JWT_SECRET = process.env.HOTBOX_JWT_SECRET ?? '';
 const DEFAULT_ORG = process.env.HOTBOX_ORG ?? 'toadsage';
 
 function b64url(data: Buffer | string): string {
@@ -26,11 +28,15 @@ function makeJwt(orgId: string, memberId: string): string {
 }
 
 export async function GET() {
+  if (!JWT_SECRET) {
+    console.error('[ws-token] HOTBOX_JWT_SECRET is not set — refusing to issue token');
+    return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 });
+  }
   const cookieStore = cookies();
-  const memberId =
-    cookieStore.get('hotbox-member-id')?.value ||
-    process.env.HOTBOX_MEMBER_ID ||
-    `user:${DEFAULT_ORG}`;
+  const memberId = cookieStore.get('hotbox-member-id')?.value;
+  if (!memberId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   const token = makeJwt(DEFAULT_ORG, memberId);
   return NextResponse.json({ token });

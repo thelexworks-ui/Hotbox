@@ -1,6 +1,12 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
 
+  // F5: fail-loud at server startup if critical secrets are missing.
+  // Catches misconfigured deployments before any request is served.
+  if (!process.env.HOTBOX_JWT_SECRET) {
+    throw new Error('[startup] HOTBOX_JWT_SECRET is not set — server will not start. Set this env var and redeploy.');
+  }
+
   const org = process.env.HOTBOX_ORG ?? 'toadsage';
 
   // Resolved by webpack to the real onboarding-service for node target,
