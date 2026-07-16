@@ -7,6 +7,14 @@ export const runtime = 'nodejs';
 const DEFAULT_ORG = process.env.HOTBOX_ORG ?? 'toadsage';
 
 export async function GET(req: NextRequest) {
+  // Finding 4: identity check — must present a member-id cookie.
+  // Prevents unauthenticated key fetch. Middleware also enforces this at the edge;
+  // this is defense-in-depth at the handler layer.
+  const memberId = req.cookies.get('hotbox-member-id')?.value;
+  if (!memberId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     await persistenceProbe;
   } catch {

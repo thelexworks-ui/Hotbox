@@ -4,7 +4,11 @@ import crypto from 'crypto';
 
 export const runtime = 'nodejs';
 
-const JWT_SECRET = process.env.HOTBOX_JWT_SECRET ?? 'dev-secret-change-in-prod';
+const JWT_SECRET = (() => {
+  const s = process.env.HOTBOX_JWT_SECRET;
+  if (!s) throw new Error('[ws-token] HOTBOX_JWT_SECRET is not set — refusing to start');
+  return s;
+})();
 const DEFAULT_ORG = process.env.HOTBOX_ORG ?? 'toadsage';
 
 function b64url(data: Buffer | string): string {
