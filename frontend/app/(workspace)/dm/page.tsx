@@ -97,8 +97,12 @@ export default function DmInboxPage() {
     <div className="flex flex-col h-full" style={{ background: 'var(--hotbox-bg)' }}>
       {/* Header */}
       <div
-        className="flex items-center px-4 py-3 border-b border-[var(--hotbox-border)] flex-shrink-0"
-        style={{ background: 'var(--hotbox-surface)' }}
+        className="flex items-center px-4 py-3 border-b border-[var(--hotbox-border-strong)] flex-shrink-0"
+        style={{
+          background: 'rgba(5,12,20,0.72)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+        }}
       >
         <h1 className="font-semibold text-sm text-[var(--hotbox-text)]">Direct Messages</h1>
         {dms.length > 0 && (
