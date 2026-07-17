@@ -41,6 +41,7 @@ export interface KeystoreContextValue {
   encrypt(chatId: string, plaintext: string): Promise<AegisEnvelope>;
   decrypt(envelope: AegisEnvelope): Promise<string>;
   evictCK(chatId: string): Promise<void>;
+  warmChatKey(chatId: string): Promise<void>;
 }
 
 const Ctx = createContext<KeystoreContextValue | null>(null);
@@ -112,6 +113,19 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
     };
   }, [getCK]);
 
+  // ---------- Exposed: warmChatKey — pre-fetch CK into IDB after channel creation ----------
+  // Called from handleChannelCreated so the first encrypt() hits cache, not network.
+  // Best-effort: logs on failure, never throws (channel creation already succeeded).
+
+  const warmChatKey = useCallback(async (chatId: string): Promise<void> => {
+    if (!dbRef.current) return;
+    try {
+      await getCK(chatId, 'encrypt');
+    } catch (err) {
+      console.error('[keystore] warmChatKey FAILED — first send will cold-fetch CK:', chatId, err);
+    }
+  }, [getCK]);
+
   // ---------- Exposed: decrypt ----------
 
   const decrypt = useCallback(async (envelope: AegisEnvelope): Promise<string> => {
@@ -126,7 +140,7 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
   }, [getCK]);
 
   return (
-    <Ctx.Provider value={{ ready, encrypt, decrypt, evictCK }}>
+    <Ctx.Provider value={{ ready, encrypt, decrypt, evictCK, warmChatKey }}>
       {children}
     </Ctx.Provider>
   );
