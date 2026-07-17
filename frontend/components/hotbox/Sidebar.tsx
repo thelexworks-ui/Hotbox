@@ -237,9 +237,10 @@ export function Sidebar({ onItemClick, onNeuralLink }: { onItemClick?: () => voi
   const refetchChannels = useCallback(async () => {
     try {
       const res = await fetch(`/api/hotbox/channels?org=${ORG}`);
+      if (!res.ok) { console.error('[sidebar] channels fetch failed:', res.status); return; }
       const data = await res.json();
       if (Array.isArray(data)) setChannels(data);
-    } catch {}
+    } catch (err) { console.error('[sidebar] refetchChannels error:', err); }
   }, [setChannels]);
 
   useEffect(() => {
