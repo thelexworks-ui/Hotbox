@@ -38,6 +38,7 @@ async function openHotboxDB(org: string): Promise<IDBPDatabase> {
 
 export interface KeystoreContextValue {
   ready: boolean;
+  keystoreError: string | null;
   encrypt(chatId: string, plaintext: string): Promise<AegisEnvelope>;
   decrypt(envelope: AegisEnvelope): Promise<string>;
   evictCK(chatId: string): Promise<void>;
@@ -45,6 +46,7 @@ export interface KeystoreContextValue {
 }
 
 const Ctx = createContext<KeystoreContextValue | null>(null);
+// Default context satisfies TypeScript; actual value always provided by KeystoreProvider.
 
 export function useKeystore(): KeystoreContextValue {
   const ctx = useContext(Ctx);
@@ -54,6 +56,7 @@ export function useKeystore(): KeystoreContextValue {
 
 export function KeystoreProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
+  const [keystoreError, setKeystoreError] = useState<string | null>(null);
   const dbRef = useRef<IDBPDatabase | null>(null);
 
   useEffect(() => {
@@ -61,7 +64,11 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
       dbRef.current = db;
       setReady(true);
     }).catch((err) => {
-      console.error('[keystore] IDB open failed', err);
+      // Propagate: don't swallow IDB failure silently (F3).
+      // ready stays false → Composer send button disabled.
+      // keystoreError surfaces the root cause to consumers.
+      console.error('[keystore] FATAL: IDB open failed — chat-keys store unavailable', err);
+      setKeystoreError('Browser storage unavailable — encryption disabled. Try reloading or clearing site data.');
     });
   }, []);
 
@@ -140,7 +147,7 @@ export function KeystoreProvider({ children }: { children: React.ReactNode }) {
   }, [getCK]);
 
   return (
-    <Ctx.Provider value={{ ready, encrypt, decrypt, evictCK, warmChatKey }}>
+    <Ctx.Provider value={{ ready, keystoreError, encrypt, decrypt, evictCK, warmChatKey }}>
       {children}
     </Ctx.Provider>
   );
