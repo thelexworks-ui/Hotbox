@@ -15,7 +15,9 @@ export function KeyRotationWatcher() {
     return subscribe('key.rotated', (msg: ServerMessage) => {
       const { chatId } = msg as unknown as { chatId?: string };
       if (chatId) {
-        evictCK(chatId).catch(() => {});
+        evictCK(chatId).catch((err) => {
+          console.error('[keystore:rotation] evictCK failed — stale CK may persist until next fetch:', chatId, err);
+        });
       }
     });
   }, [subscribe, evictCK]);
