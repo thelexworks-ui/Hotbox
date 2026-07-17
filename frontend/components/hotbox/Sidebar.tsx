@@ -10,6 +10,7 @@ import { ChannelCreateModal } from './ChannelCreateModal';
 import { MembersPanel, RoleBadge } from './MembersPanel';
 import { InviteModal } from './InviteModal';
 import { useAuth } from './AuthProvider';
+import { useKeystore } from './KeystoreProvider';
 
 const ORG = process.env.NEXT_PUBLIC_HOTBOX_ORG ?? 'toadsage';
 const WORKSPACE_NAME = process.env.NEXT_PUBLIC_HOTBOX_WORKSPACE_NAME ?? ORG;
@@ -223,6 +224,7 @@ export function Sidebar({ onItemClick, onNeuralLink }: { onItemClick?: () => voi
   const agentsOnly    = useAgentsOnly(15_000);
 
   const { role } = useAuth();
+  const { warmChatKey } = useKeystore();
 
   const [showCreate, setShowCreate]   = useState(false);
   const [showMembers, setShowMembers] = useState(false);
@@ -267,10 +269,13 @@ export function Sidebar({ onItemClick, onNeuralLink }: { onItemClick?: () => voi
     return () => { unsub1(); unsub2(); };
   }, [subscribe, appendChannel, setPresence]);
 
-  // CH3: append optimistic, close modal, re-fetch authoritative list, then navigate
+  // CH3: append optimistic, close modal, pre-warm CK, re-fetch authoritative list, then navigate
   const handleChannelCreated = async (ch: ChannelMeta) => {
     appendChannel(ch);
     setShowCreate(false);
+    // Pre-warm the IDB CK cache so first encrypt() hits cache not network (F1).
+    // Fire-and-forget: warmChatKey logs on failure, never throws.
+    void warmChatKey(ch.id);
     await refetchChannels();
     router.push(`/channels/${ch.id}`);
   };

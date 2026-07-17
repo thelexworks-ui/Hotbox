@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { listChannels, createChannel, bootstrapWorkspace } from '@/lib/hotbox/channel-service';
 import { validateMasterKey } from '@/lib/hotbox/master-key';
 import { randomBytes } from 'node:crypto';
-import { storeChannelKey, storeChannelMembers } from '@/lib/hotbox/keys-store';
+import { storeChannelKey, storeChannelMembers, hasChannelKey } from '@/lib/hotbox/keys-store';
 
 export const runtime = 'nodejs';
 
@@ -47,12 +47,20 @@ export async function POST(req: NextRequest) {
     members: memberList,
   });
 
-  if (!channel) return NextResponse.json({ error: 'channel already exists or create failed' }, { status: 409 });
+  if (!channel) return NextResponse.json({ error: 'create failed' }, { status: 500 });
 
-  // Atomic CK generation: store the channel key immediately so the first send never
-  // hits a missing-key gap. The GET self-heal is a fallback, not the happy path.
-  const ck = randomBytes(32).toString('base64');
-  await storeChannelKey(org, channel.id, ck);
+  // Guard: only write CK if one doesn't already exist. createChannel already stores
+  // a CK for new channels. Writing a second random CK would silently rotate the key,
+  // making all cached CKs stale and breaking decryption for existing members (F2).
+  const ckPresent = await hasChannelKey(org, channel.id);
+  if (!ckPresent) {
+    try {
+      await storeChannelKey(org, channel.id, randomBytes(32).toString('base64'));
+    } catch (err) {
+      console.error('[channels] FATAL: CK write failed for newly-created channel', { org, channelId: channel.id, err });
+      return NextResponse.json({ error: 'Channel created but encryption key storage failed — retry or contact support' }, { status: 500 });
+    }
+  }
 
   // Persist membership so adapters can discover this channel via hotbox_keys
   if (memberList.length > 0) {
