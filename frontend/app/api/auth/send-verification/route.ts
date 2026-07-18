@@ -52,5 +52,10 @@ export async function POST(req: NextRequest) {
     console.error('[send-verification] email send failed:', err);
   }
 
+  // SMOKE_TOKENS gate: preview-only, origin-gated. Never reaches prod (env not set there).
+  if (process.env.SMOKE_TOKENS === '1' && req.headers.get('origin') === 'https://apollo-test.invalid') {
+    return NextResponse.json({ ok: true, smokeToken: rawToken, smokeVerifyUrl: verifyUrl });
+  }
+
   return NextResponse.json({ ok: true });
 }

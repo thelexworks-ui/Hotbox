@@ -54,5 +54,10 @@ export async function POST(req: NextRequest) {
     // Don't leak: still return ok. Admin can extract link from server logs.
   }
 
+  // SMOKE_TOKENS gate: preview-only, origin-gated. Never reaches prod (env not set there).
+  if (process.env.SMOKE_TOKENS === '1' && req.headers.get('origin') === 'https://apollo-test.invalid') {
+    return NextResponse.json({ ok: true, smokeToken: rawToken, smokeResetUrl: resetUrl });
+  }
+
   return NextResponse.json({ ok: true });
 }
