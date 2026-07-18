@@ -43,9 +43,16 @@ export async function GET() {
   return NextResponse.json({ memberId, org });
 }
 
+function extractToken(req: NextRequest): string | null {
+  const cookieToken = cookies().get('hx_access')?.value;
+  if (cookieToken) return cookieToken;
+  const auth = req.headers.get('authorization');
+  if (auth?.startsWith('Bearer ')) return auth.slice(7);
+  return null;
+}
+
 export async function PATCH(req: NextRequest) {
-  const cookieStore = cookies();
-  const token = cookieStore.get('hx_access')?.value;
+  const token = extractToken(req);
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   let claims;
