@@ -16,15 +16,21 @@ export async function GET() {
       if (claims.member_id) {
         const [orgRow, userRow] = await Promise.all([
           db.from('orgs').select('slug').eq('id', claims.org).maybeSingle(),
-          db.from('users').select('name, email, email_verified_at').eq('id', claims.sub).maybeSingle(),
+          db.from('users').select('email, email_verified_at').eq('id', claims.sub).maybeSingle(),
         ]);
+        const agentRow = await db
+          .from('agent_accounts')
+          .select('name')
+          .eq('org_id', claims.org)
+          .eq('role', 'headmaster')
+          .maybeSingle();
         return NextResponse.json({
-          memberId:       claims.member_id,
-          org:            orgRow.data?.slug ?? process.env.HOTBOX_ORG ?? 'toadsage',
-          userId:         claims.sub,
-          role:           claims.role,
-          name:           userRow.data?.name ?? null,
-          email:          userRow.data?.email ?? null,
+          memberId:        claims.member_id,
+          org:             orgRow.data?.slug ?? process.env.HOTBOX_ORG ?? 'toadsage',
+          userId:          claims.sub,
+          role:            claims.role,
+          name:            agentRow.data?.name ?? null,
+          email:           userRow.data?.email ?? null,
           emailVerifiedAt: userRow.data?.email_verified_at ?? null,
         });
       }
@@ -66,18 +72,31 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const updates: Record<string, string> = {};
+  if (body.name === undefined && body.email === undefined) {
+    return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+  }
+
+  // name lives in agent_accounts (users table has no name column)
   if (body.name !== undefined) {
     const name = body.name.trim();
     if (!name) return NextResponse.json({ error: 'name cannot be empty' }, { status: 400 });
-    updates.name = name;
+    const { error: nameErr } = await db
+      .from('agent_accounts')
+      .update({ name })
+      .eq('org_id', claims.org)
+      .eq('role', 'headmaster');
+    if (nameErr) {
+      console.error('[me:patch] name update failed:', nameErr);
+      return NextResponse.json({ error: 'Failed to update name', detail: nameErr.message }, { status: 500 });
+    }
   }
+
+  // email lives in users table
   if (body.email !== undefined) {
     const email = body.email.trim().toLowerCase();
     if (!email || !email.includes('@')) {
       return NextResponse.json({ error: 'invalid email' }, { status: 400 });
     }
-    // Check uniqueness
     const { data: existing } = await db
       .from('users')
       .select('id')
@@ -85,34 +104,25 @@ export async function PATCH(req: NextRequest) {
       .neq('id', claims.sub)
       .maybeSingle();
     if (existing) return NextResponse.json({ error: 'Email already in use' }, { status: 409 });
-    updates.email = email;
-    // Email change clears verification — user must re-verify
-    updates.email_verified_at = null as unknown as string;
+    const { error: emailErr } = await db
+      .from('users')
+      .update({ email, email_verified_at: null })
+      .eq('id', claims.sub);
+    if (emailErr) {
+      console.error('[me:patch] email update failed:', emailErr);
+      return NextResponse.json({ error: 'Failed to update email', detail: emailErr.message }, { status: 500 });
+    }
   }
 
-  if (Object.keys(updates).length === 0) {
-    return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
-  }
-
-  const { error: updateErr } = await db
-    .from('users')
-    .update(updates)
-    .eq('id', claims.sub);
-  if (updateErr) {
-    console.error('[me:patch] update failed:', updateErr);
-    return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 });
-  }
-
-  const { data: updated } = await db
-    .from('users')
-    .select('name, email, email_verified_at')
-    .eq('id', claims.sub)
-    .maybeSingle();
+  const [userRow, agentRow] = await Promise.all([
+    db.from('users').select('email, email_verified_at').eq('id', claims.sub).maybeSingle(),
+    db.from('agent_accounts').select('name').eq('org_id', claims.org).eq('role', 'headmaster').maybeSingle(),
+  ]);
 
   return NextResponse.json({
     ok: true,
-    name:  updated?.name ?? null,
-    email: updated?.email ?? null,
-    emailVerifiedAt: updated?.email_verified_at ?? null,
+    name:            agentRow.data?.name ?? null,
+    email:           userRow.data?.email ?? null,
+    emailVerifiedAt: userRow.data?.email_verified_at ?? null,
   });
 }
