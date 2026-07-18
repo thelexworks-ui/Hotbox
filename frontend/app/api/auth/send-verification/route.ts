@@ -7,8 +7,16 @@ export const runtime = 'nodejs';
 
 const VERIFY_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+function extractToken(req: NextRequest): string | null {
+  const cookieToken = req.cookies.get('hx_access')?.value;
+  if (cookieToken) return cookieToken;
+  const auth = req.headers.get('authorization');
+  if (auth?.startsWith('Bearer ')) return auth.slice(7);
+  return null;
+}
+
 export async function POST(req: NextRequest) {
-  const accessToken = req.cookies.get('hx_access')?.value;
+  const accessToken = extractToken(req);
   if (!accessToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   let claims;
@@ -38,7 +46,7 @@ export async function POST(req: NextRequest) {
   }
 
   const origin = req.headers.get('origin') ?? process.env.NEXT_PUBLIC_APP_URL ?? 'https://hotbox-seven.vercel.app';
-  const verifyUrl = `${origin}/auth/verify-email?token=${rawToken}`;
+  const verifyUrl = `${origin}/api/auth/verify-email?token=${rawToken}`;
 
   try {
     await sendEmail({
