@@ -45,7 +45,7 @@ export async function GET() {
 }
 
 function extractToken(req: NextRequest): string | null {
-  const cookieToken = cookies().get('hx_access')?.value;
+  const cookieToken = req.cookies.get('hx_access')?.value;
   if (cookieToken) return cookieToken;
   const auth = req.headers.get('authorization');
   if (auth?.startsWith('Bearer ')) return auth.slice(7);
@@ -93,8 +93,6 @@ export async function PATCH(req: NextRequest) {
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
   }
-
-  updates.updated_at = new Date().toISOString();
 
   const { error: updateErr } = await db
     .from('users')

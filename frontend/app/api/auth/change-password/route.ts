@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { verifyAccessToken, verifyPassword, hashPassword } from '@/lib/fusion/auth';
 import { db } from '@/lib/fusion/supabase';
 
 export const runtime = 'nodejs';
 
 function extractToken(req: NextRequest): string | null {
-  const cookieToken = cookies().get('hx_access')?.value;
+  const cookieToken = req.cookies.get('hx_access')?.value;
   if (cookieToken) return cookieToken;
   const auth = req.headers.get('authorization');
   if (auth?.startsWith('Bearer ')) return auth.slice(7);
@@ -49,7 +48,7 @@ export async function POST(req: NextRequest) {
 
   const { error: updateErr } = await db
     .from('users')
-    .update({ password_hash: newHash, updated_at: new Date().toISOString() })
+    .update({ password_hash: newHash })
     .eq('id', user.id);
   if (updateErr) {
     console.error('[change-password] update failed:', updateErr);
