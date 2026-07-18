@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
 
   // SMOKE_TOKENS gate: preview-only, origin-gated. Never reaches prod (env not set there).
   if (process.env.SMOKE_TOKENS === '1' && req.headers.get('origin') === 'https://apollo-test.invalid') {
-    return NextResponse.json({ ok: true, smokeToken: rawToken, smokeResetUrl: resetUrl });
+    return NextResponse.json({ ok: true, smokeTokens: { resetToken: rawToken, resetUrl } });
   }
 
   return NextResponse.json({ ok: true });
