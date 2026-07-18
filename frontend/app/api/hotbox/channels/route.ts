@@ -3,6 +3,7 @@ import { listChannels, createChannel, bootstrapWorkspace } from '@/lib/hotbox/ch
 import { validateMasterKey } from '@/lib/hotbox/master-key';
 import { randomBytes } from 'node:crypto';
 import { storeChannelKey, storeChannelMembers, hasChannelKey } from '@/lib/hotbox/keys-store';
+import { requireEmailVerified } from '@/lib/fusion/require-verified';
 
 export const runtime = 'nodejs';
 
@@ -29,6 +30,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await requireEmailVerified(req);
+  if (denied) return denied;
+
   const body = await req.json() as {
     org?: string; name: string; type: string; topic?: string;
     members?: string[]; memberIds?: string[];

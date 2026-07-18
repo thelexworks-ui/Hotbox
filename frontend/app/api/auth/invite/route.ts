@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto';
 import { cookies } from 'next/headers';
 import { verifyAccessToken, hashRefreshToken } from '@/lib/fusion/auth';
 import { db } from '@/lib/fusion/supabase';
+import { requireEmailVerified } from '@/lib/fusion/require-verified';
 
 export const runtime = 'nodejs';
 
@@ -12,6 +13,9 @@ const INVITE_TTL_HOURS = 72;
 // Requires: hx_access cookie with role=headmaster
 // Returns: { inviteUrl: string, expiresAt: string }
 export async function POST(req: NextRequest) {
+  const denied = await requireEmailVerified(req);
+  if (denied) return denied;
+
   // Auth: require headmaster JWT
   const token = req.cookies.get('hx_access')?.value;
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
