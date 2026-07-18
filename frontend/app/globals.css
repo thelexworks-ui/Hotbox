@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -218,5 +220,65 @@ body {
     font-family: 'JetBrains Mono', monospace;
     font-size: 12px;
     opacity: 0.6;
+  }
+
+  /* ── Auth design system (glass-card, hx-input, hx-btn-*) ── */
+  .glass-card {
+    background: rgba(10, 22, 40, 0.72);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(90, 218, 238, 0.15);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.48), inset 0 1px 0 rgba(90,218,238,0.10);
+  }
+
+  .hx-input {
+    background: rgba(5, 12, 20, 0.60);
+    border: 1px solid rgba(90, 218, 238, 0.20);
+    color: #E8F4F8;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+
+  .hx-input::placeholder {
+    color: rgba(232, 244, 248, 0.30);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8125rem;
+  }
+
+  .hx-input:focus {
+    outline: none;
+    border-color: rgba(90, 218, 238, 0.60);
+    box-shadow: 0 0 0 3px rgba(90, 218, 238, 0.08);
+  }
+
+  .hx-btn-primary {
+    background: #5ADAEE;
+    color: #050C14;
+    font-weight: 600;
+    transition: box-shadow 150ms ease, opacity 150ms ease;
+    box-shadow: 0 0 16px rgba(90, 218, 238, 0.30);
+  }
+
+  .hx-btn-primary:hover:not(:disabled) {
+    box-shadow: 0 0 24px rgba(90, 218, 238, 0.50);
+    opacity: 0.95;
+  }
+
+  .hx-btn-ghost {
+    background: transparent;
+    border: 1px solid rgba(90, 218, 238, 0.25);
+    color: rgba(232, 244, 248, 0.70);
+    transition: border-color 150ms ease, color 150ms ease;
+  }
+
+  .hx-btn-ghost:hover {
+    border-color: rgba(90, 218, 238, 0.50);
+    color: #E8F4F8;
+  }
+
+  .bokeh {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
   }
 }
