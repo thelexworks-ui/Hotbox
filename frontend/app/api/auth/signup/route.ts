@@ -10,8 +10,24 @@ import {
   generateAgentPassword,
 } from '@/lib/fusion/auth';
 import { bootstrapWorkspace } from '@/lib/hotbox/channel-service';
+import { sendEmail } from '@/lib/fusion/email';
 
 export const runtime = 'nodejs';
+
+async function sendVerificationEmail(userId: string, email: string, origin: string): Promise<void> {
+  const rawToken = generateRefreshToken();
+  const tokenHash = hashRefreshToken(rawToken);
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  await db.from('email_verification_tokens').insert({ user_id: userId, token_hash: tokenHash, expires_at: expiresAt });
+  const verifyUrl = `${origin}/auth/verify-email?token=${rawToken}`;
+  await sendEmail({
+    to: email,
+    subject: 'Verify your Hotbox email',
+    html: `<p>Welcome to Hotbox! Click the link below to verify your email address.</p>
+<p><a href="${verifyUrl}">${verifyUrl}</a></p>
+<p>This link expires in 24 hours.</p>`,
+  }).catch((err) => console.error('[signup] verification email failed:', err));
+}
 
 // POST /api/auth/signup
 // Body: { name: string, email: string, password: string, orgName: string }
@@ -113,9 +129,14 @@ export async function POST(req: NextRequest) {
     console.error('[signup] refresh_token insert error:', rtErr);
   }
 
+  // Send verification email (fire-and-forget — don't block signup on email delivery)
+  const origin = process.env.NEXT_PUBLIC_APP_URL ?? 'https://hotbox-seven.vercel.app';
+  void sendVerificationEmail(user.id, user.email, origin);
+
   const res = NextResponse.json({
     token: accessToken,
     refreshToken: rawRefresh,
+    emailVerificationSent: true,
     user: { id: user.id, email: user.email, slug: userSlug },
     org: { id: org.id, slug: org.slug, name: org.name },
   }, { status: 201 });
