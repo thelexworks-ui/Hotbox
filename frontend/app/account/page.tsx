@@ -145,7 +145,7 @@ export default function AccountPage() {
         <div className="w-full max-w-xl space-y-4">
 
           {/* Profile */}
-          <div className="glass-card rounded-2xl p-6 space-y-5">
+          <div className="glass-card rounded-2xl p-6 space-y-5" data-testid="account-profile-section">
             <h2 className="text-[#E8F4F8] text-base font-semibold tracking-tight">Profile</h2>
 
             <AvatarUpload name={displayName || 'User'} />
@@ -162,6 +162,7 @@ export default function AccountPage() {
                 onChange={e => { setDisplayName(e.target.value); setProfileSaved(false) }}
                 className="hx-input w-full rounded-lg px-4 py-3 text-sm"
                 placeholder="Your name"
+                data-testid="account-name-input"
               />
             </div>
 
@@ -170,7 +171,7 @@ export default function AccountPage() {
                 Email
               </label>
               <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[rgba(5,12,20,0.40)] border border-[rgba(90,218,238,0.10)]">
-                <span className="text-[rgba(232,244,248,0.55)] text-sm font-mono truncate">{email || '—'}</span>
+                <span className="text-[rgba(232,244,248,0.55)] text-sm font-mono truncate" data-testid="account-email">{email || '—'}</span>
                 {emailVerified && (
                   <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[rgba(90,218,238,0.08)] border border-[rgba(90,218,238,0.18)] shrink-0">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#5ADAEE]" />

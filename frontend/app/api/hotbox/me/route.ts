@@ -16,15 +16,16 @@ export async function GET() {
       if (claims.member_id) {
         const [orgRow, userRow] = await Promise.all([
           db.from('orgs').select('slug').eq('id', claims.org).maybeSingle(),
-          db.from('users').select('name, email').eq('id', claims.sub).maybeSingle(),
+          db.from('users').select('name, email, email_verified_at').eq('id', claims.sub).maybeSingle(),
         ]);
         return NextResponse.json({
-          memberId:  claims.member_id,
-          org:       orgRow.data?.slug ?? process.env.HOTBOX_ORG ?? 'toadsage',
-          userId:    claims.sub,
-          role:      claims.role,
-          name:      userRow.data?.name ?? null,
-          email:     userRow.data?.email ?? null,
+          memberId:       claims.member_id,
+          org:            orgRow.data?.slug ?? process.env.HOTBOX_ORG ?? 'toadsage',
+          userId:         claims.sub,
+          role:           claims.role,
+          name:           userRow.data?.name ?? null,
+          email:          userRow.data?.email ?? null,
+          emailVerifiedAt: userRow.data?.email_verified_at ?? null,
         });
       }
     } catch {
