@@ -18,12 +18,11 @@ export async function GET(req: NextRequest) {
     .maybeSingle();
 
   if (!vt || vt.used_at || new Date(vt.expires_at) < new Date()) {
-    return NextResponse.json({ error: 'Invalid or expired verification link' }, { status: 400 });
+    return NextResponse.redirect(new URL('/verify?error=expired', req.url));
   }
 
   await db.from('users').update({ email_verified_at: new Date().toISOString() }).eq('id', vt.user_id);
   await db.from('email_verification_tokens').update({ used_at: new Date().toISOString() }).eq('id', vt.id);
 
-  // Redirect to verified success page
-  return NextResponse.redirect(new URL('/auth/verify-email-success', req.url));
+  return NextResponse.redirect(new URL('/verify', req.url));
 }

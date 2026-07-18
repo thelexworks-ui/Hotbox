@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   }
 
   const origin = req.headers.get('origin') ?? process.env.NEXT_PUBLIC_APP_URL ?? 'https://hotbox-seven.vercel.app';
-  const resetUrl = `${origin}/auth/set-new-password?token=${rawToken}`;
+  const resetUrl = `${origin}/reset-password?token=${rawToken}`;
 
   try {
     await sendEmail({

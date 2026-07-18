@@ -11,12 +11,14 @@ const PUBLIC_API_PREFIXES = [
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Accept either legacy invite-code cookie or new JWT cookie for auth.
+  // Accept legacy invite-code cookie, new JWT cookie, or Authorization: Bearer header.
   // Signature verification is deferred to route handlers (Node runtime); middleware
   // only checks presence so it can run on Edge without jose latency per request.
-  const memberId  = req.cookies.get('hotbox-member-id')?.value;
-  const jwtAccess = req.cookies.get('hx_access')?.value;
-  const authed    = !!(memberId || jwtAccess);
+  const memberId    = req.cookies.get('hotbox-member-id')?.value;
+  const jwtAccess   = req.cookies.get('hx_access')?.value;
+  const bearerToken = req.headers.get('authorization')?.startsWith('Bearer ')
+    ? req.headers.get('authorization')!.slice(7) : undefined;
+  const authed = !!(memberId || jwtAccess || bearerToken);
 
   // API guard: all /api/hotbox/* require auth except login/admin/internal paths.
   if (pathname.startsWith('/api/hotbox/')) {
@@ -37,5 +39,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/channels/:path*', '/dm/:path*', '/api/hotbox/:path*'],
+  matcher: ['/dashboard/:path*', '/account/:path*', '/channels/:path*', '/dm/:path*', '/api/hotbox/:path*'],
 };

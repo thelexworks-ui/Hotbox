@@ -53,7 +53,7 @@ function LoginForm() {
         setError(data.error ?? 'Login failed');
         return;
       }
-      window.location.href = searchParams.get('redirect') ?? '/channels/general';
+      window.location.href = searchParams.get('redirect') ?? '/dashboard';
     } catch {
       setError('Network error — please try again');
     } finally {
@@ -73,7 +73,7 @@ function LoginForm() {
       });
       const data = await res.json() as { error?: string };
       if (!res.ok) { setError(data.error ?? 'Login failed'); return; }
-      window.location.href = searchParams.get('redirect') ?? '/channels/general';
+      window.location.href = searchParams.get('redirect') ?? '/dashboard';
     } catch {
       setError('Network error — please try again');
     } finally {
