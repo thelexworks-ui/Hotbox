@@ -200,8 +200,9 @@ function NotificationPanel({
 
 export function NotificationsProvider() {
   const { subscribe, send, status, sendReplay } = useWs();
-  const channels  = useHotboxStore((s) => s.channels);
-  const pathname  = usePathname();
+  const channels       = useHotboxStore((s) => s.channels);
+  const appendMessage  = useHotboxStore((s) => s.appendMessage);
+  const pathname       = usePathname();
 
   const [history, setHistory]     = useState<HotboxNotification[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -224,13 +225,21 @@ export function NotificationsProvider() {
     sendReplay();
   }, [status, channels, send, sendReplay]);
 
-  // All-messages subscription — feeds the bell panel history only (no toast here).
+  // All-messages subscription — drives unread badge (via appendMessage) and bell panel history.
+  // appendMessage is safe to call for the active channel too: the store deduplicates on msg.id,
+  // so the ChannelView's own appendMessage call and this one are both no-ops after the first.
   useEffect(() => {
     return subscribe('msg.new', (serverMsg) => {
       const m = serverMsg.message as HotboxMessage | undefined;
       if (!m) return;
 
       const channelId = m.channel_id;
+
+      // Always append — store.appendMessage increments unread only when channel is not active,
+      // and deduplicates silently when ChannelView has already appended the same message.
+      appendMessage(channelId, m);
+
+      // Bell panel history: skip if the user is currently viewing this channel
       if (isViewingChannel(channelId, pathnameRef.current)) return;
 
       const channel     = channelsRef.current.find((c) => c.id === channelId);
@@ -245,7 +254,7 @@ export function NotificationsProvider() {
 
       setHistory((prev) => [notification, ...prev].slice(0, MAX_HISTORY));
     });
-  }, [subscribe]);
+  }, [subscribe, appendMessage]);
 
   // Mark panel items read when navigating to that channel
   useEffect(() => {
