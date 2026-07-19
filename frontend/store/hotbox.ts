@@ -15,6 +15,7 @@ export interface ChannelMeta {
   topic?: string;
   members: string[];
   unread?: number;
+  mentionCount?: number;
 }
 
 interface HotboxState {
@@ -33,6 +34,7 @@ interface HotboxState {
   clearTyping(channelId: string): void;
   setPresence(agent: string, status: PresenceStatus): void;
   markRead(channelId: string): void;
+  incrementMention(channelId: string): void;
   incrementThreadCount(channelId: string, messageId: string): void;
   reconcilePending(channelId: string, nonce: string, realMsg: AnyMessage): void;
   removeMessage(channelId: string, messageId: string): void;
@@ -54,7 +56,7 @@ export const useHotboxStore = create<HotboxState>((set) => ({
   setActiveChannel: (id) =>
     set((s) => ({
       activeChannelId: id,
-      channels: s.channels.map((c) => (c.id === id ? { ...c, unread: 0 } : c)),
+      channels: s.channels.map((c) => (c.id === id ? { ...c, unread: 0, mentionCount: 0 } : c)),
     })),
 
   appendMessage: (channelId, msg) =>
@@ -92,7 +94,14 @@ export const useHotboxStore = create<HotboxState>((set) => ({
 
   markRead: (channelId) =>
     set((s) => ({
-      channels: s.channels.map((c) => (c.id === channelId ? { ...c, unread: 0 } : c)),
+      channels: s.channels.map((c) => (c.id === channelId ? { ...c, unread: 0, mentionCount: 0 } : c)),
+    })),
+
+  incrementMention: (channelId) =>
+    set((s) => ({
+      channels: s.channels.map((c) =>
+        c.id === channelId ? { ...c, mentionCount: (c.mentionCount ?? 0) + 1 } : c
+      ),
     })),
 
   incrementThreadCount: (channelId, messageId) =>
