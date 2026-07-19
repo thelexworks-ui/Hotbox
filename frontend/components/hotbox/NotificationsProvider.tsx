@@ -1,14 +1,14 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+// Note: NotificationToast removed — transient toasts moved to MentionToastLayer in AppShell
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useWs } from './WsProvider';
 import { useHotboxStore } from '@/store/hotbox';
 import type { HotboxMessage } from '@/lib/hotbox/types';
 
-const TOAST_DURATION_MS = 5_000;
-const MAX_HISTORY       = 50;
+const MAX_HISTORY = 50;
 
 interface HotboxNotification {
   id: string;
@@ -194,44 +194,37 @@ function NotificationPanel({
 }
 
 // ── NotificationsProvider (mounts inside AppShell) ───────────────────────────
+// Owns the bell-panel notification history (all messages).
+// The @-mention / DM toast is handled separately by useMentionDetect + MentionToastLayer
+// in AppShell — this component no longer fires transient toasts.
 
 export function NotificationsProvider() {
   const { subscribe, send, status, sendReplay } = useWs();
-  const channels       = useHotboxStore((s) => s.channels);
-  const pathname       = usePathname();
+  const channels  = useHotboxStore((s) => s.channels);
+  const pathname  = usePathname();
 
-  const [history, setHistory]       = useState<HotboxNotification[]>([]);
-  const [toast, setToast]           = useState<HotboxNotification | null>(null);
-  const [panelOpen, setPanelOpen]   = useState(false);
-  const toastTimer                  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const panelRef                    = useRef<HTMLDivElement>(null);
+  const [history, setHistory]     = useState<HotboxNotification[]>([]);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const panelRef                  = useRef<HTMLDivElement>(null);
 
-  // Refs so the subscription handler always has current values without being in deps
   const pathnameRef = useRef(pathname);
   const channelsRef = useRef(channels);
   useEffect(() => { pathnameRef.current = pathname; }, [pathname]);
   useEffect(() => { channelsRef.current = channels; }, [channels]);
 
-  const dismissToast = useCallback(() => {
-    setToast(null);
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-  }, []);
-
   const markAllRead = useCallback(() => {
     setHistory((prev) => prev.map((n) => ({ ...n, read: true })));
   }, []);
 
-  // Global channel subscription: join all channels so msg.new is delivered from any
-  // channel, not just the one ChannelView is currently rendering. Then fire the
-  // deferred replay — server replays only subscribed channels, so replay must come
-  // AFTER channel.join, not on hello (which is the WS handshake before any joins).
+  // Join all channels so msg.new is delivered from any channel, then fire the
+  // deferred replay (must come AFTER channel.join — server only replays subscribed channels).
   useEffect(() => {
     if (status !== 'open' || channels.length === 0) return;
     channels.forEach((ch) => send({ type: 'channel.join', channel_id: ch.id }));
     sendReplay();
   }, [status, channels, send, sendReplay]);
 
-  // Subscribe to incoming messages — stable subscription (refs carry current state)
+  // All-messages subscription — feeds the bell panel history only (no toast here).
   useEffect(() => {
     return subscribe('msg.new', (serverMsg) => {
       const m = serverMsg.message as HotboxMessage | undefined;
@@ -245,30 +238,19 @@ export function NotificationsProvider() {
       const href        = channelHref(channelId);
 
       const notification: HotboxNotification = {
-        id: m.id,
-        channelId,
-        channelName,
-        senderId: m.sender_id,
-        ts: m.ts,
-        read: false,
-        href,
+        id: m.id, channelId, channelName,
+        senderId: m.sender_id, ts: m.ts,
+        read: false, href,
       };
 
       setHistory((prev) => [notification, ...prev].slice(0, MAX_HISTORY));
-
-      // Show toast (replace any active one)
-      dismissToast();
-      setToast(notification);
-      toastTimer.current = setTimeout(() => setToast(null), TOAST_DURATION_MS);
     });
-  }, [subscribe, dismissToast]);
+  }, [subscribe]);
 
-  // Mark notifications for current channel as read when navigating to it
+  // Mark panel items read when navigating to that channel
   useEffect(() => {
     setHistory((prev) =>
-      prev.map((n) =>
-        isViewingChannel(n.channelId, pathname) ? { ...n, read: true } : n
-      )
+      prev.map((n) => isViewingChannel(n.channelId, pathname) ? { ...n, read: true } : n)
     );
   }, [pathname]);
 
@@ -292,51 +274,37 @@ export function NotificationsProvider() {
   };
 
   return (
-    <>
-      {/* Bell button — fixed top-right on desktop, hidden on mobile (covered by tab bar) */}
-      <div
-        ref={panelRef}
-        className="hidden md:block fixed top-3 right-4 z-50"
-        style={{ position: 'fixed' }}
+    <div
+      ref={panelRef}
+      className="hidden md:block fixed top-3 right-4 z-50"
+    >
+      <button
+        onClick={handleBellClick}
+        aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
+        className="relative flex items-center justify-center w-8 h-8 rounded-full transition-colors"
+        style={{
+          background: panelOpen ? 'var(--hotbox-surface-2)' : 'transparent',
+          color: 'var(--hotbox-text-muted)',
+        }}
       >
-        <button
-          onClick={handleBellClick}
-          aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
-          className="relative flex items-center justify-center w-8 h-8 rounded-full transition-colors"
-          style={{
-            background: panelOpen ? 'var(--hotbox-surface-2)' : 'transparent',
-            color: 'var(--hotbox-text-muted)',
-          }}
-        >
-          <BellIcon />
-          {unreadCount > 0 && (
-            <span
-              className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold leading-4 text-center text-white"
-              style={{ background: 'var(--hotbox-mention)' }}
-            >
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </span>
-          )}
-        </button>
-
-        {panelOpen && (
-          <NotificationPanel
-            notifications={history}
-            onClose={() => setPanelOpen(false)}
-            onMarkAllRead={markAllRead}
-          />
+        <BellIcon />
+        {unreadCount > 0 && (
+          <span
+            className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold leading-4 text-center text-white"
+            style={{ background: 'var(--hotbox-mention)' }}
+          >
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
         )}
-      </div>
+      </button>
 
-      {/* Toast — fixed bottom-right (above mobile tab bar on mobile) */}
-      {toast && (
-        <div
-          className="fixed right-4 z-50"
-          style={{ bottom: 80, maxWidth: 320, width: 'calc(100vw - 2rem)' }}
-        >
-          <NotificationToast notification={toast} onDismiss={dismissToast} />
-        </div>
+      {panelOpen && (
+        <NotificationPanel
+          notifications={history}
+          onClose={() => setPanelOpen(false)}
+          onMarkAllRead={markAllRead}
+        />
       )}
-    </>
+    </div>
   );
 }

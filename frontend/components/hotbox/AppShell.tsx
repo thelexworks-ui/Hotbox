@@ -6,8 +6,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { KeyRotationWatcher } from './KeyRotationWatcher';
 import { NotificationsProvider } from './NotificationsProvider';
+import { MentionToastLayer, useMentionToasts } from './MentionToast';
 import { useWs } from './WsProvider';
 import { useKeystore } from './KeystoreProvider';
+import { useMentionDetect } from '@/hooks/useMentionDetect';
 
 const NeuralGlobe = dynamic(
   () => import('@/app/preview/dashboard-v2/NeuralGlobe'),
@@ -127,9 +129,16 @@ function MobileTabBar({ onOpenDrawer }: { onOpenDrawer(): void }) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { ready } = useKeystore();
+  const pathname = usePathname();
   const [mobileDrawerOpen, setMobileDrawerOpen] = React.useState(false);
   const [showGlobe, setShowGlobe] = React.useState(false);
   const [prefersReduced, setPrefersReduced] = React.useState(false);
+
+  // @-mention / DM toast layer — suppressed on /dashboard surface
+  const { toasts, add: addToast, dismiss: dismissToast } = useMentionToasts();
+  useMentionDetect((event) => {
+    if (!pathname.startsWith('/dashboard')) addToast(event);
+  });
 
   React.useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -194,6 +203,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <MobileTabBar onOpenDrawer={() => setMobileDrawerOpen(true)} />
+
+      {/* @-mention / DM toast layer — desktop top-right, mobile bottom-center */}
+      <MentionToastLayer toasts={toasts} onDismiss={dismissToast} />
 
       {showGlobe && (
         <div

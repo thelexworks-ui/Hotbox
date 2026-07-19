@@ -184,11 +184,20 @@ function ChannelItem({ channel, onItemClick }: { channel: ChannelMeta; onItemCli
       {channel.agent_name && presence && <PresenceDot status={presence} />}
       {!channel.agent_name && <span className="text-[var(--hotbox-text-dim)] text-xs leading-none">#</span>}
       <span className="truncate flex-1 text-sm">{channel.name.replace(/^#/, '')}</span>
-      {(channel.unread ?? 0) > 0 && (
+      {(channel.mentionCount ?? 0) > 0 ? (
+        // @-mention badge — higher priority display than plain unread
+        <span
+          className="ml-auto text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none"
+          style={{ background: 'var(--hotbox-mention)' }}
+          title={`${channel.mentionCount} @-mention${(channel.mentionCount ?? 0) > 1 ? 's' : ''}`}
+        >
+          @{(channel.mentionCount ?? 0) > 1 ? channel.mentionCount : ''}
+        </span>
+      ) : (channel.unread ?? 0) > 0 ? (
         <span className="ml-auto bg-[var(--hotbox-accent)] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
           {channel.unread}
         </span>
-      )}
+      ) : null}
     </Link>
   );
 }
