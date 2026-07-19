@@ -56,7 +56,8 @@ export function useMentionDetect(onMention: MentionHandler) {
       if (msg.channel_id === activeChannelIdRef.current) return;
 
       const channel = channelsRef.current.find((c) => c.id === msg.channel_id);
-      const isDm = channel?.type === 'dm';
+      // Fallback to ID prefix when channel isn't in the store yet (e.g. DM created mid-session)
+      const isDm = channel?.type === 'dm' || msg.channel_id.startsWith('dm-');
 
       // For non-DM channels, check for @-mention after decrypt
       let isMention = isDm; // DMs always qualify
