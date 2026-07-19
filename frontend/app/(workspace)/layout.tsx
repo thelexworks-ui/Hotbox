@@ -9,7 +9,7 @@ import { useHotboxStore } from '@/store/hotbox';
 // (tab switch, browser focus, or navigating to the channel while already there).
 function useVisibilityMarkRead() {
   const pathname = usePathname();
-  const markRead = useHotboxStore((s) => s.markRead);
+  const setActiveChannel = useHotboxStore((s) => s.setActiveChannel);
 
   useEffect(() => {
     // Extract channelId from /channels/[id] or /dm/[memberId] routes
@@ -18,8 +18,12 @@ function useVisibilityMarkRead() {
     const channelId    = channelMatch?.[1] ?? dmMatch?.[1];
     if (!channelId) return;
 
+    // Sync activeChannelId immediately on navigation so appendMessage knows
+    // which channel is active and suppresses unread increments for it.
+    setActiveChannel(channelId);
+
     const onVisible = () => {
-      if (!document.hidden) markRead(channelId);
+      if (!document.hidden) setActiveChannel(channelId);
     };
 
     document.addEventListener('visibilitychange', onVisible);
@@ -28,7 +32,7 @@ function useVisibilityMarkRead() {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', onVisible);
     };
-  }, [pathname, markRead]);
+  }, [pathname, setActiveChannel]);
 }
 
 function WorkspaceInner({ children }: { children: React.ReactNode }) {
