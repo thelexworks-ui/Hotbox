@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listChannels, createChannel, bootstrapWorkspace } from '@/lib/hotbox/channel-service';
-import { validateMasterKey } from '@/lib/hotbox/master-key';
 import { randomBytes } from 'node:crypto';
 import { storeChannelKey, storeChannelMembers, hasChannelKey } from '@/lib/hotbox/keys-store';
 import { requireEmailVerified } from '@/lib/fusion/require-verified';
 import { resolveAuthScope } from '@/lib/hotbox/auth-scope';
-import { verifyAccessToken } from '@/lib/fusion/auth';
-import { db } from '@/lib/fusion/supabase';
 
 export const runtime = 'nodejs';
-
-const DEFAULT_ORG = process.env.HOTBOX_ORG ?? 'toadsage';
 
 const DEFAULT_CHANNELS = (org: string, now: string) => [
   { id: 'general', name: '#general', type: 'system' as const, org, pinned: true, created_at: now, topic: 'General discussion', members: [], agent_name: undefined, agent_role: undefined },
@@ -18,51 +13,22 @@ const DEFAULT_CHANNELS = (org: string, now: string) => [
 ];
 
 export async function GET(req: NextRequest) {
-  const masterRole = validateMasterKey(req.headers.get('x-master-key'));
+  const scope = await resolveAuthScope(req);
+  if (!scope.ok) return scope.response;
 
-  // Auth + org scope.
-  // Master-key callers (adapters/orchestrator) are trusted server-side — use ?org param as-is.
-  // JWT callers: derive org slug from token (UUID → orgs.slug) so ?org param cannot be forged.
-  let memberId: string | null = null;
-  let org: string;
-
-  if (masterRole) {
-    org = req.nextUrl.searchParams.get('org') ?? DEFAULT_ORG;
-  } else {
-    const jwt = req.cookies.get('hx_access')?.value;
-    if (jwt) {
-      try {
-        const claims = await verifyAccessToken(jwt);
-        memberId = claims.member_id ?? null;
-        // Resolve org UUID → slug so the caller cannot inject a cross-org ?org param.
-        const { data: orgRow } = await db.from('orgs').select('slug').eq('id', claims.org).maybeSingle();
-        org = orgRow?.slug ?? DEFAULT_ORG;
-      } catch {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-    } else {
-      // Legacy cookie path (pre-fusion): pin to DEFAULT_ORG — never allow ?org injection.
-      memberId = req.cookies.get('hotbox-member-id')?.value ?? null;
-      org = DEFAULT_ORG;
-    }
-    if (!memberId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-  }
-
-  let channels = await listChannels(org);
+  let channels = await listChannels(scope.org);
   if (channels.length === 0) {
-    await bootstrapWorkspace(org);
-    channels = await listChannels(org);
+    await bootstrapWorkspace(scope.org);
+    channels = await listChannels(scope.org);
   }
 
   // Visibility: master-key sees all; authenticated users see non-DM channels + DMs they are a member of.
-  const visible = masterRole
+  const visible = scope.masterRole
     ? channels
-    : channels.filter((c) => c.type !== 'dm' || c.members.includes(memberId!));
+    : channels.filter((c) => c.type !== 'dm' || c.members.includes(scope.memberId!));
 
-  const res = NextResponse.json(visible.length > 0 ? visible : DEFAULT_CHANNELS(org, new Date().toISOString()));
-  if (masterRole) res.headers.set('X-Role', masterRole);
+  const res = NextResponse.json(visible.length > 0 ? visible : DEFAULT_CHANNELS(scope.org, new Date().toISOString()));
+  if (scope.masterRole) res.headers.set('X-Role', scope.masterRole);
   return res;
 }
 
