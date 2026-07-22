@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readMessages, appendMessage } from '@/lib/hotbox/channel-service';
-import { validateMasterKey } from '@/lib/hotbox/master-key';
 import type { AegisEnvelope, AnyMessage, HotboxMessage } from '@/lib/hotbox/types';
+import { resolveAuthScope } from '@/lib/hotbox/auth-scope';
 
 function isChatMsg(m: AnyMessage): m is HotboxMessage {
   return m.type === 'message';
@@ -9,15 +9,14 @@ function isChatMsg(m: AnyMessage): m is HotboxMessage {
 
 export const runtime = 'nodejs';
 
-const DEFAULT_ORG = process.env.HOTBOX_ORG ?? 'toadsage';
-
 export async function GET(req: NextRequest, { params }: { params: { channelId: string } }) {
-  const org = req.nextUrl.searchParams.get('org') ?? DEFAULT_ORG;
+  const scope = await resolveAuthScope(req);
+  if (!scope.ok) return scope.response;
+
   const limit = Number(req.nextUrl.searchParams.get('limit') ?? 100);
   const threadParentId = req.nextUrl.searchParams.get('thread') ?? undefined;
-  const masterRole = validateMasterKey(req.headers.get('x-master-key'));
 
-  const msgs = await readMessages(org, params.channelId, limit);
+  const msgs = await readMessages(scope.org, params.channelId, limit);
 
   let filtered: AnyMessage[];
   if (threadParentId) {
@@ -27,7 +26,7 @@ export async function GET(req: NextRequest, { params }: { params: { channelId: s
   }
 
   const res = NextResponse.json(filtered);
-  if (masterRole) res.headers.set('X-Role', masterRole);
+  if (scope.masterRole) res.headers.set('X-Role', scope.masterRole);
   return res;
 }
 
@@ -35,9 +34,12 @@ const WS_INTERNAL_URL = process.env.HOTBOX_WS_INTERNAL_URL ?? 'http://localhost:
 const INTERNAL_SECRET  = process.env.HOTBOX_INTERNAL_SECRET;
 
 export async function POST(req: NextRequest, { params }: { params: { channelId: string } }) {
+  const scope = await resolveAuthScope(req);
+  if (!scope.ok) return scope.response;
+
   const body = await req.json() as { crypto_envelope: AegisEnvelope; sender_id: string; thread_parent_id?: string; org?: string };
   const { crypto_envelope, sender_id, thread_parent_id } = body;
-  const org = body.org ?? DEFAULT_ORG;
+  const org = scope.org; // always from auth scope; ignore caller-supplied body.org
 
   if (!crypto_envelope || !sender_id) {
     return NextResponse.json({ error: 'crypto_envelope and sender_id required' }, { status: 400 });

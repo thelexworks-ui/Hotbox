@@ -4,6 +4,9 @@ import { validateMasterKey } from '@/lib/hotbox/master-key';
 import { randomBytes } from 'node:crypto';
 import { storeChannelKey, storeChannelMembers, hasChannelKey } from '@/lib/hotbox/keys-store';
 import { requireEmailVerified } from '@/lib/fusion/require-verified';
+import { resolveAuthScope } from '@/lib/hotbox/auth-scope';
+import { verifyAccessToken } from '@/lib/fusion/auth';
+import { db } from '@/lib/fusion/supabase';
 
 export const runtime = 'nodejs';
 
@@ -15,8 +18,37 @@ const DEFAULT_CHANNELS = (org: string, now: string) => [
 ];
 
 export async function GET(req: NextRequest) {
-  const org = req.nextUrl.searchParams.get('org') ?? DEFAULT_ORG;
   const masterRole = validateMasterKey(req.headers.get('x-master-key'));
+
+  // Auth + org scope.
+  // Master-key callers (adapters/orchestrator) are trusted server-side — use ?org param as-is.
+  // JWT callers: derive org slug from token (UUID → orgs.slug) so ?org param cannot be forged.
+  let memberId: string | null = null;
+  let org: string;
+
+  if (masterRole) {
+    org = req.nextUrl.searchParams.get('org') ?? DEFAULT_ORG;
+  } else {
+    const jwt = req.cookies.get('hx_access')?.value;
+    if (jwt) {
+      try {
+        const claims = await verifyAccessToken(jwt);
+        memberId = claims.member_id ?? null;
+        // Resolve org UUID → slug so the caller cannot inject a cross-org ?org param.
+        const { data: orgRow } = await db.from('orgs').select('slug').eq('id', claims.org).maybeSingle();
+        org = orgRow?.slug ?? DEFAULT_ORG;
+      } catch {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    } else {
+      // Legacy cookie path (pre-fusion): pin to DEFAULT_ORG — never allow ?org injection.
+      memberId = req.cookies.get('hotbox-member-id')?.value ?? null;
+      org = DEFAULT_ORG;
+    }
+    if (!memberId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+  }
 
   let channels = await listChannels(org);
   if (channels.length === 0) {
@@ -24,7 +56,12 @@ export async function GET(req: NextRequest) {
     channels = await listChannels(org);
   }
 
-  const res = NextResponse.json(channels.length > 0 ? channels : DEFAULT_CHANNELS(org, new Date().toISOString()));
+  // Visibility: master-key sees all; authenticated users see non-DM channels + DMs they are a member of.
+  const visible = masterRole
+    ? channels
+    : channels.filter((c) => c.type !== 'dm' || c.members.includes(memberId!));
+
+  const res = NextResponse.json(visible.length > 0 ? visible : DEFAULT_CHANNELS(org, new Date().toISOString()));
   if (masterRole) res.headers.set('X-Role', masterRole);
   return res;
 }
@@ -33,11 +70,16 @@ export async function POST(req: NextRequest) {
   const denied = await requireEmailVerified(req);
   if (denied) return denied;
 
+  // Derive org from JWT claims — ignore body.org to prevent cross-org write injection.
+  const scope = await resolveAuthScope(req);
+  if (!scope.ok) return scope.response;
+
   const body = await req.json() as {
-    org?: string; name: string; type: string; topic?: string;
+    name: string; type: string; topic?: string;
     members?: string[]; memberIds?: string[];
   };
-  const { org = DEFAULT_ORG, name, type, topic } = body;
+  const { name, type, topic } = body;
+  const org = scope.org;
   // Modal sends memberIds; server-to-server callers may send members — accept both
   const memberList = body.memberIds ?? body.members ?? [];
 

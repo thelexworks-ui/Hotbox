@@ -1,53 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { verifyAccessToken } from '@/lib/fusion/auth';
 import { db } from '@/lib/fusion/supabase';
 
 export const runtime = 'nodejs';
 
-export async function GET() {
-  const cookieStore = cookies();
+export async function GET(req: NextRequest) {
+  // JWT-only auth — all five aegis-audited fallthrough paths are eliminated:
+  // P2a (no cookie), P2b (catch-through), P2c (member_id falsy), P1 (org null),
+  // P2d (legacy cookie). Each case is now an explicit 401.
+  const jwt =
+    req.cookies.get('hx_access')?.value ??
+    req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+  if (!jwt) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  // Path 1: JWT via hx_access cookie (new auth)
-  const accessCookie = cookieStore.get('hx_access');
-  if (accessCookie?.value) {
-    try {
-      const claims = await verifyAccessToken(accessCookie.value);
-      if (claims.member_id) {
-        const [orgRow, userRow] = await Promise.all([
-          db.from('orgs').select('slug').eq('id', claims.org).maybeSingle(),
-          db.from('users').select('email, email_verified_at').eq('id', claims.sub).maybeSingle(),
-        ]);
-        const agentRow = await db
-          .from('agent_accounts')
-          .select('name')
-          .eq('org_id', claims.org)
-          .eq('role', 'headmaster')
-          .maybeSingle();
-        return NextResponse.json({
-          memberId:        claims.member_id,
-          org:             orgRow.data?.slug ?? process.env.HOTBOX_ORG ?? 'toadsage',
-          userId:          claims.sub,
-          role:            claims.role,
-          name:            agentRow.data?.name ?? null,
-          email:           userRow.data?.email ?? null,
-          emailVerifiedAt: userRow.data?.email_verified_at ?? null,
-        });
-      }
-    } catch {
-      // Token expired or invalid — fall through to legacy path
-    }
+  let claims;
+  try { claims = await verifyAccessToken(jwt); } catch {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  if (!claims.member_id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  // Path 2: Legacy invite-code cookie (HOTBOXBETA beta path)
-  const sessionCookie = cookieStore.get('hotbox-member-id');
-  const memberId =
-    sessionCookie?.value ||
-    process.env.HOTBOX_MEMBER_ID ||
-    `user:${process.env.HOTBOX_ORG ?? 'local'}`;
-  const org = process.env.HOTBOX_ORG ?? 'toadsage';
+  const [orgRow, userRow] = await Promise.all([
+    db.from('orgs').select('slug').eq('id', claims.org).maybeSingle(),
+    db.from('users').select('email, email_verified_at').eq('id', claims.sub).maybeSingle(),
+  ]);
+  if (!orgRow.data) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  return NextResponse.json({ memberId, org });
+  const agentRow = await db
+    .from('agent_accounts')
+    .select('name')
+    .eq('org_id', claims.org)
+    .eq('role', 'headmaster')
+    .maybeSingle();
+
+  return NextResponse.json({
+    memberId:        claims.member_id,
+    org:             orgRow.data.slug,
+    userId:          claims.sub,
+    role:            claims.role,
+    name:            agentRow.data?.name ?? null,
+    email:           userRow.data?.email ?? null,
+    emailVerifiedAt: userRow.data?.email_verified_at ?? null,
+  });
 }
 
 function extractToken(req: NextRequest): string | null {
