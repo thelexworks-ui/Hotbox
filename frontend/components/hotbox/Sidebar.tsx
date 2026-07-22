@@ -232,7 +232,7 @@ export function Sidebar({ onItemClick, onNeuralLink }: { onItemClick?: () => voi
   const orchestrators = useOrchestrators(30_000);
   const agentsOnly    = useAgentsOnly(15_000);
 
-  const { role } = useAuth();
+  const { role, org: authOrg } = useAuth();
   const { warmChatKey } = useKeystore();
 
   const [showCreate, setShowCreate]   = useState(false);
@@ -245,7 +245,7 @@ export function Sidebar({ onItemClick, onNeuralLink }: { onItemClick?: () => voi
   // CH3: refetch channels (also triggered by refreshKey for CH4)
   const refetchChannels = useCallback(async () => {
     try {
-      const res = await fetch(`/api/hotbox/channels?org=${ORG}`);
+      const res = await fetch('/api/hotbox/channels');
       if (!res.ok) { console.error('[sidebar] channels fetch failed:', res.status); return; }
       const data = await res.json();
       if (Array.isArray(data)) setChannels(data);
@@ -258,8 +258,8 @@ export function Sidebar({ onItemClick, onNeuralLink }: { onItemClick?: () => voi
 
   useEffect(() => {
     fetch('/api/hotbox/presence')
-      .then((r) => r.json())
-      .then((data: Record<string, PresenceStatus>) => {
+      .then((r) => { if (!r.ok) return; return r.json(); })
+      .then((data: Record<string, PresenceStatus> | undefined) => {
         if (data && typeof data === 'object') {
           Object.entries(data).forEach(([agent, status]) => setPresence(agent, status));
         }
@@ -346,7 +346,7 @@ export function Sidebar({ onItemClick, onNeuralLink }: { onItemClick?: () => voi
             className="font-semibold text-sm text-[var(--hotbox-text)] truncate"
             style={{ textShadow: '0 0 14px rgba(90,218,238,0.45)' }}
           >
-            {WORKSPACE_NAME}
+            {authOrg || WORKSPACE_NAME}
           </span>
           <div className="flex items-center gap-2">
             {/* CH4: Refresh button */}
