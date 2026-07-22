@@ -73,14 +73,16 @@ export async function POST(req: NextRequest) {
   }
 
   const agentId = claims.sub;
-  const body = await req.json() as { channel_id: string; plaintext: string; org?: string };
-  const { channel_id, plaintext, org = DEFAULT_ORG } = body;
+  const body = await req.json() as { channel_id: string; plaintext: string; org?: string; keys_org?: string };
+  const { channel_id, plaintext, org = DEFAULT_ORG, keys_org = org } = body;
 
   if (!channel_id || !plaintext) {
     return NextResponse.json({ error: 'channel_id and plaintext required' }, { status: 400 });
   }
 
-  const ck = await loadChannelKey(org, channel_id);
+  // keys_org separates CK namespace from message-storage org (needed when client keys live in a
+  // different org than the JWT-scoped message store, e.g. toadsage keys + optimus messages).
+  const ck = await loadChannelKey(keys_org, channel_id);
   if (!ck) {
     return NextResponse.json({ error: 'Channel key not found' }, { status: 404 });
   }
