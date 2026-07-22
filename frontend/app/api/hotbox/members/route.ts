@@ -4,8 +4,6 @@ import { resolveAuthScope } from '@/lib/hotbox/auth-scope';
 
 export const runtime = 'nodejs';
 
-const FALLBACK_AGENTS = ['headmaster', 'boss', 'apollo', 'hepha-web'];
-
 export async function GET(req: NextRequest) {
   const scope = await resolveAuthScope(req);
   if (!scope.ok) return scope.response;
@@ -20,12 +18,13 @@ export async function GET(req: NextRequest) {
       for (const m of ch.members ?? []) memberSet.add(m);
     }
 
-    // Env var seeds
+    // Deployment-specific env seeds (optional; never fall back to a hardcoded list)
     if (process.env.HOTBOX_MEMBER_ID) memberSet.add(process.env.HOTBOX_MEMBER_ID);
-    const knownAgents = process.env.HOTBOX_KNOWN_AGENTS
-      ? process.env.HOTBOX_KNOWN_AGENTS.split(',').map((s) => s.trim()).filter(Boolean)
-      : FALLBACK_AGENTS;
-    for (const id of knownAgents) memberSet.add(id);
+    if (process.env.HOTBOX_KNOWN_AGENTS) {
+      for (const id of process.env.HOTBOX_KNOWN_AGENTS.split(',').map((s) => s.trim()).filter(Boolean)) {
+        memberSet.add(id);
+      }
+    }
 
     const members = Array.from(memberSet).map((id) => ({
       id,

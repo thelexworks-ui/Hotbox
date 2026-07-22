@@ -232,7 +232,7 @@ export function Sidebar({ onItemClick, onNeuralLink }: { onItemClick?: () => voi
   const orchestrators = useOrchestrators(30_000);
   const agentsOnly    = useAgentsOnly(15_000);
 
-  const { role } = useAuth();
+  const { role, org: authOrg } = useAuth();
   const { warmChatKey } = useKeystore();
 
   const [showCreate, setShowCreate]   = useState(false);
@@ -346,7 +346,7 @@ export function Sidebar({ onItemClick, onNeuralLink }: { onItemClick?: () => voi
             className="font-semibold text-sm text-[var(--hotbox-text)] truncate"
             style={{ textShadow: '0 0 14px rgba(90,218,238,0.45)' }}
           >
-            {WORKSPACE_NAME}
+            {authOrg || WORKSPACE_NAME}
           </span>
           <div className="flex items-center gap-2">
             {/* CH4: Refresh button */}

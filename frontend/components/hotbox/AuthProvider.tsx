@@ -30,19 +30,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetch('/api/hotbox/me')
-      .then((r) => r.json())
-      .then((data: Partial<{ memberId: string; org: string; role: string }>) => {
-        // Guard: fall back to safe defaults if the response shape is unexpected.
-        // memberId must be a non-empty string — it becomes an IDB key.
+      .then(async (r) => {
+        if (!r.ok) {
+          // Unauthenticated or error — keep defaults, mark ready so UI doesn't hang
+          setAuth((prev) => ({ ...prev, ready: true }));
+          return;
+        }
+        const data: Partial<{ memberId: string; org: string; role: string }> = await r.json();
+        // Guard: memberId must be non-empty — it becomes an IDB key.
         setAuth({
           memberId: data?.memberId || 'user:local',
-          org: data?.org || 'toadsage',
+          org: data?.org || '',
           role: data?.role || '',
           ready: true,
         });
       })
       .catch(() => {
-        // Non-fatal: keep defaults, mark ready so UI doesn't hang
+        // Network error — keep defaults, mark ready so UI doesn't hang
         setAuth((prev) => ({ ...prev, ready: true }));
       });
   }, []);
