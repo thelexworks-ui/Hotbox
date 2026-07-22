@@ -30,7 +30,7 @@ export async function PATCH(
   const current: string[] =
     (existing?.payload as { starred?: string[] } | null)?.starred ?? [];
   const updated = body.starred
-    ? [...new Set([...current, params.channelId])]
+    ? Array.from(new Set([...current, params.channelId]))
     : current.filter((id) => id !== params.channelId);
 
   const { error } = await db.from('hotbox_keys').upsert(
