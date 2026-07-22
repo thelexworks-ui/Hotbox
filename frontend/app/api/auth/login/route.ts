@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 
   const { data: user, error } = await db
     .from('users')
-    .select('id, org_id, email, role, password_hash')
+    .select('id, org_id, email, role, password_hash, email_verified_at')
     .eq('email', email)
     .maybeSingle();
 
@@ -41,6 +41,10 @@ export async function POST(req: NextRequest) {
   const valid = await verifyPassword(password, user.password_hash);
   if (!valid) {
     return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+  }
+
+  if (!user.email_verified_at) {
+    return NextResponse.json({ error: 'Email verification required', code: 'EMAIL_NOT_VERIFIED' }, { status: 403 });
   }
 
   const { data: org } = await db.from('orgs').select('id, slug, name').eq('id', user.org_id).single();

@@ -19,7 +19,7 @@ async function sendVerificationEmail(userId: string, email: string, origin: stri
   const tokenHash = hashRefreshToken(rawToken);
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   await db.from('email_verification_tokens').insert({ user_id: userId, token_hash: tokenHash, expires_at: expiresAt });
-  const verifyUrl = `${origin}/auth/verify-email?token=${rawToken}`;
+  const verifyUrl = `${origin}/api/auth/verify-email?token=${rawToken}`;
   await sendEmail({
     to: email,
     subject: 'Verify your Hotbox email',
