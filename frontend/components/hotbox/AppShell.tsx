@@ -127,7 +127,14 @@ function MobileTabBar({ onOpenDrawer }: { onOpenDrawer(): void }) {
   );
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+interface AppShellProps {
+  children: React.ReactNode;
+  sidebarContent?: React.ReactNode;
+  collapsedSidebar?: boolean;
+  onSidebarToggle?: () => void;
+}
+
+export function AppShell({ children, sidebarContent, collapsedSidebar }: AppShellProps) {
   const { ready } = useKeystore();
   const pathname = usePathname();
   const [mobileDrawerOpen, setMobileDrawerOpen] = React.useState(false);
@@ -159,15 +166,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* Desktop sidebar */}
         <aside
           data-testid="sidebar"
-          className="hidden md:flex flex-col flex-shrink-0 w-60 border-r border-[var(--hotbox-border)]"
+          data-collapsed={collapsedSidebar || undefined}
+          className={[
+            'hidden md:flex flex-col flex-shrink-0 border-r border-[var(--hotbox-border)] overflow-hidden relative',
+            collapsedSidebar !== undefined
+              ? 'transition-[width] duration-[250ms] ease-[cubic-bezier(0.4,0,0.2,1)]'
+              : 'w-60',
+          ].join(' ')}
           style={{
             background: 'var(--hotbox-surface)',
             backdropFilter: 'blur(10px)',
             borderRightColor: 'rgba(26,74,90,0.60)',
             boxShadow: 'inset -1px 0 0 rgba(90,218,238,0.06)',
+            ...(collapsedSidebar !== undefined
+              ? { width: collapsedSidebar ? 48 : 240 }
+              : {}),
           }}
         >
-          <Sidebar onNeuralLink={() => setShowGlobe(true)} />
+          {sidebarContent ?? <Sidebar onNeuralLink={() => setShowGlobe(true)} />}
         </aside>
 
         {/* Mobile sidebar drawer */}
