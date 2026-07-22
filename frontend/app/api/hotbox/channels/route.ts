@@ -4,6 +4,7 @@ import { validateMasterKey } from '@/lib/hotbox/master-key';
 import { randomBytes } from 'node:crypto';
 import { storeChannelKey, storeChannelMembers, hasChannelKey } from '@/lib/hotbox/keys-store';
 import { requireEmailVerified } from '@/lib/fusion/require-verified';
+import { verifyAccessToken } from '@/lib/fusion/auth';
 
 export const runtime = 'nodejs';
 
@@ -18,13 +19,31 @@ export async function GET(req: NextRequest) {
   const org = req.nextUrl.searchParams.get('org') ?? DEFAULT_ORG;
   const masterRole = validateMasterKey(req.headers.get('x-master-key'));
 
+  // Auth: master-key callers (adapters) bypass; all other callers require a valid session.
+  let memberId: string | null = null;
+  if (!masterRole) {
+    const jwt = req.cookies.get('hx_access')?.value;
+    if (jwt) {
+      try { memberId = (await verifyAccessToken(jwt)).member_id ?? null; } catch { /* expired */ }
+    }
+    memberId ??= req.cookies.get('hotbox-member-id')?.value ?? null;
+    if (!memberId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+  }
+
   let channels = await listChannels(org);
   if (channels.length === 0) {
     await bootstrapWorkspace(org);
     channels = await listChannels(org);
   }
 
-  const res = NextResponse.json(channels.length > 0 ? channels : DEFAULT_CHANNELS(org, new Date().toISOString()));
+  // Visibility: master-key sees all; authenticated users see non-DM channels + DMs they are a member of.
+  const visible = masterRole
+    ? channels
+    : channels.filter((c) => c.type !== 'dm' || c.members.includes(memberId!));
+
+  const res = NextResponse.json(visible.length > 0 ? visible : DEFAULT_CHANNELS(org, new Date().toISOString()));
   if (masterRole) res.headers.set('X-Role', masterRole);
   return res;
 }
