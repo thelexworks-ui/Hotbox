@@ -219,6 +219,39 @@ function ChannelGroup({ label, channels, onItemClick }: { label: string; channel
 
 // ── Sidebar ──────────────────────────────────────────────────────────────────
 
+function SidebarProfileRow() {
+  const { name, org, logout } = useAuth();
+  const initials = (name || org || 'HX').slice(0, 2).toUpperCase();
+  return (
+    <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-[var(--hotbox-border)]">
+      <Link
+        href="/account"
+        className="flex items-center gap-1.5 flex-1 min-w-0 rounded px-1 py-1 transition-colors hover:bg-[var(--hotbox-hover)]"
+        title="Account settings"
+      >
+        <span
+          className="w-5 h-5 rounded flex items-center justify-center text-[9px] font-bold font-mono flex-shrink-0"
+          style={{ background: 'rgba(90,218,238,0.10)', border: '1px solid rgba(90,218,238,0.20)', color: '#5ADAEE' }}
+        >
+          {initials}
+        </span>
+        <span className="truncate text-[11px] text-[var(--hotbox-text-dim)]">{name || org || 'Account'}</span>
+      </Link>
+      <button
+        onClick={() => void logout()}
+        title="Sign out"
+        className="flex-shrink-0 p-1 rounded transition-colors text-[var(--hotbox-text-muted)] hover:text-[var(--hotbox-crashed)] hover:bg-[rgba(255,77,77,0.06)]"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16 17 21 12 16 7" />
+          <line x1="21" y1="12" x2="9" y2="12" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 export function Sidebar({ onItemClick, onNeuralLink }: { onItemClick?: () => void; onNeuralLink?: () => void }) {
   const router = useRouter();
   const channels     = useHotboxStore((s) => s.channels);
@@ -411,6 +444,7 @@ export function Sidebar({ onItemClick, onNeuralLink }: { onItemClick?: () => voi
               + Invite member
             </button>
           )}
+          <SidebarProfileRow />
         </div>
       </nav>
     </>

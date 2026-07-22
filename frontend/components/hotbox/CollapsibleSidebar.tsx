@@ -316,16 +316,81 @@ export function CollapsibleSidebar({ collapsed, onToggle }: CollapsibleSidebarPr
       </div>
 
       {/* Footer */}
-      {!collapsed && (
-        <div className="border-t px-3 py-3 flex-shrink-0" style={{ borderColor: 'rgba(26,74,90,0.50)' }}>
-          <button
-            className="w-full text-left text-[12px] px-2 py-1.5 rounded transition-colors hover:bg-[rgba(90,218,238,0.06)]"
-            style={{ color: 'rgba(232,244,248,0.40)' }}
-          >
-            + New channel
-          </button>
-        </div>
-      )}
+      <div className="border-t flex-shrink-0" style={{ borderColor: 'rgba(26,74,90,0.50)' }}>
+        {!collapsed && (
+          <div className="px-3 pt-3 pb-1">
+            <button
+              className="w-full text-left text-[12px] px-2 py-1.5 rounded transition-colors hover:bg-[rgba(90,218,238,0.06)]"
+              style={{ color: 'rgba(232,244,248,0.40)' }}
+            >
+              + New channel
+            </button>
+          </div>
+        )}
+
+        <ProfileFooter collapsed={collapsed} />
+      </div>
+    </div>
+  );
+}
+
+function ProfileFooter({ collapsed }: { collapsed: boolean }) {
+  const { name, org, logout } = useAuth();
+  const initials = (name || org || 'HX').slice(0, 2).toUpperCase();
+
+  if (collapsed) {
+    return (
+      <div className="flex justify-center py-2">
+        <Link
+          href="/account"
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold font-mono transition-colors hover:bg-[rgba(90,218,238,0.12)]"
+          style={{
+            background: 'rgba(90,218,238,0.08)',
+            border: '1px solid rgba(90,218,238,0.18)',
+            color: '#5ADAEE',
+          }}
+          title="Account settings"
+        >
+          {initials}
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-3 py-3 flex items-center gap-2">
+      <Link
+        href="/account"
+        className="flex items-center gap-2 flex-1 min-w-0 rounded-lg px-2 py-1.5 transition-colors hover:bg-[rgba(90,218,238,0.06)]"
+        title="Account settings"
+      >
+        <span
+          className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold font-mono flex-shrink-0"
+          style={{
+            background: 'rgba(90,218,238,0.10)',
+            border: '1px solid rgba(90,218,238,0.20)',
+            color: '#5ADAEE',
+          }}
+        >
+          {initials}
+        </span>
+        <span className="truncate text-[12px]" style={{ color: 'rgba(232,244,248,0.60)' }}>
+          {name || org || 'Account'}
+        </span>
+      </Link>
+
+      <button
+        onClick={() => void logout()}
+        title="Sign out"
+        className="flex-shrink-0 p-1.5 rounded transition-colors hover:bg-[rgba(255,77,77,0.08)]"
+        style={{ color: 'rgba(232,244,248,0.30)' }}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16 17 21 12 16 7" />
+          <line x1="21" y1="12" x2="9" y2="12" />
+        </svg>
+      </button>
     </div>
   );
 }

@@ -6,14 +6,23 @@ interface AuthContext {
   memberId: string;
   org: string;
   role: string;
+  name: string;
   ready: boolean;
+  logout: () => Promise<void>;
+}
+
+async function doLogout() {
+  try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* best-effort */ }
+  window.location.href = '/login';
 }
 
 const Ctx = createContext<AuthContext>({
   memberId: 'user:local',
   org: process.env.NEXT_PUBLIC_HOTBOX_ORG || 'toadsage',
   role: '',
+  name: '',
   ready: false,
+  logout: doLogout,
 });
 
 export function useAuth(): AuthContext {
@@ -25,28 +34,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     memberId: 'user:local',
     org: process.env.NEXT_PUBLIC_HOTBOX_ORG || 'toadsage',
     role: '',
+    name: '',
     ready: false,
+    logout: doLogout,
   });
 
   useEffect(() => {
     fetch('/api/hotbox/me')
       .then(async (r) => {
         if (!r.ok) {
-          // Unauthenticated or error — keep defaults, mark ready so UI doesn't hang
           setAuth((prev) => ({ ...prev, ready: true }));
           return;
         }
-        const data: Partial<{ memberId: string; org: string; role: string }> = await r.json();
-        // Guard: memberId must be non-empty — it becomes an IDB key.
+        const data: Partial<{ memberId: string; org: string; role: string; name: string }> = await r.json();
         setAuth({
           memberId: data?.memberId || 'user:local',
           org: data?.org || '',
           role: data?.role || '',
+          name: data?.name || '',
           ready: true,
+          logout: doLogout,
         });
       })
       .catch(() => {
-        // Network error — keep defaults, mark ready so UI doesn't hang
         setAuth((prev) => ({ ...prev, ready: true }));
       });
   }, []);
