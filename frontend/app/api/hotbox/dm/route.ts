@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveAuthScope } from '@/lib/hotbox/auth-scope';
-import { listChannels, createChannel } from '@/lib/hotbox/channel-service';
+import { createChannel } from '@/lib/hotbox/channel-service';
 
 export const runtime = 'nodejs';
 
@@ -20,17 +20,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Cannot DM yourself' }, { status: 400 });
   }
 
-  // Find any existing DM channel between these two members
-  const allChannels = await listChannels(scope.org);
-  const existing = allChannels.find(
-    (c) =>
-      c.type === 'dm' &&
-      c.members.includes(scope.memberId!) &&
-      c.members.includes(peerId),
-  );
-  if (existing) return NextResponse.json({ channelId: existing.id });
-
-  // Create canonical channel (sorted members → idempotent regardless of initiator)
+  // Always derive and use the canonical sorted channel ID.
+  // createChannel() is idempotent — on an existing channel it tops up any
+  // missing CK or members list, so this call also heals legacy channels
+  // that were created before storeChannelKey was wired in.
   const [a, b] = [scope.memberId!, peerId].sort();
   const channel = await createChannel({
     org: scope.org,
@@ -40,5 +33,5 @@ export async function POST(req: NextRequest) {
   });
 
   if (!channel) return NextResponse.json({ error: 'Failed to create DM' }, { status: 500 });
-  return NextResponse.json({ channelId: channel.id }, { status: 201 });
+  return NextResponse.json({ channelId: channel.id });
 }
