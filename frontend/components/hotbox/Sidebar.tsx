@@ -297,7 +297,7 @@ export function Sidebar({ onItemClick, onNeuralLink }: { onItemClick?: () => voi
           Object.entries(data).forEach(([agent, status]) => setPresence(agent, status));
         }
       })
-      .catch(() => {});
+      .catch((err) => { console.error('[sidebar] presence fetch error:', err); });
   }, [setPresence, refreshKey]);
 
   useEffect(() => {

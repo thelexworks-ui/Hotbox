@@ -55,54 +55,6 @@ function CloseIcon() {
   );
 }
 
-// ── Toast ────────────────────────────────────────────────────────────────────
-
-function NotificationToast({
-  notification,
-  onDismiss,
-}: {
-  notification: HotboxNotification;
-  onDismiss(): void;
-}) {
-  return (
-    <Link
-      href={notification.href}
-      onClick={onDismiss}
-      className="flex items-start gap-3 rounded-lg shadow-lg px-4 py-3 max-w-xs w-full"
-      style={{
-        background: 'var(--hotbox-surface)',
-        border: '1px solid var(--hotbox-border)',
-        color: 'var(--hotbox-text)',
-        textDecoration: 'none',
-      }}
-    >
-      {/* Accent stripe */}
-      <div className="flex-shrink-0 w-1 self-stretch rounded-full"
-        style={{ background: 'var(--hotbox-accent)' }} />
-
-      <div className="flex-1 min-w-0">
-        <p className="text-[11px] font-semibold text-[var(--hotbox-text-dim)] truncate">
-          {notification.channelName}
-        </p>
-        <p className="text-sm font-medium text-[var(--hotbox-text)] truncate">
-          {notification.senderId}
-        </p>
-        <p className="text-[11px] text-[var(--hotbox-text-dim)] mt-0.5">
-          New message · {formatTime(notification.ts)}
-        </p>
-      </div>
-
-      <button
-        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDismiss(); }}
-        className="flex-shrink-0 text-[var(--hotbox-text-dim)] hover:text-[var(--hotbox-text)] mt-0.5"
-        aria-label="Dismiss"
-      >
-        <CloseIcon />
-      </button>
-    </Link>
-  );
-}
-
 // ── Panel ────────────────────────────────────────────────────────────────────
 
 function NotificationPanel({
