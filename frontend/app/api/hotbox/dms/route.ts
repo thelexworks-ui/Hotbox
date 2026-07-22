@@ -38,9 +38,9 @@ export async function GET(req: NextRequest) {
 
   if (dmChannels.length === 0) return NextResponse.json({ threads: [] });
 
-  const peerSlugs = [...new Set(
+  const peerSlugs = Array.from(new Set(
     dmChannels.map((c) => c.members.find((m) => m !== scope.memberId!) ?? '').filter(Boolean),
-  )];
+  ));
 
   // Resolve display names from agent_accounts (best-effort; slug used as fallback)
   const { data: agentRows } = await db
