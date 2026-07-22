@@ -118,7 +118,7 @@ type Filter = 'all' | 'starred' | 'unreads' | 'external';
 const FILTER_IDS: Filter[] = ['all', 'starred', 'unreads', 'external'];
 const FILTER_LABEL: Record<Filter, string> = {
   all:      'All',
-  starred:  'Starred',
+  starred:  'VIP',
   unreads:  'Unreads',
   external: 'External',
 };
