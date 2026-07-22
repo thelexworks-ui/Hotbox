@@ -113,8 +113,14 @@ export async function POST(req: NextRequest) {
   // Create member_page for headmaster agent
   await db.from('member_pages').insert({ agent_id: agent.id, display_name: name });
 
-  // Bootstrap workspace channels (creates #general + #alerts) and sync headmaster into #general
-  void bootstrapWorkspace(slug);
+  // Bootstrap workspace channels (creates #general + #alerts) and sync headmaster into #general.
+  // Awaited so partial-workspace state is caught early; errors are logged but do NOT fail signup
+  // since user credentials are already committed and channels can be retried idempotently.
+  try {
+    await bootstrapWorkspace(slug);
+  } catch (err) {
+    console.error('[signup] bootstrapWorkspace failed for org', slug, err);
+  }
 
   // Issue tokens
   const userSlug = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');

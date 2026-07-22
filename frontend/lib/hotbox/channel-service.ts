@@ -256,7 +256,7 @@ export async function bootstrapWorkspace(org: string): Promise<void> {
     createChannel({ org, name: 'general', type: 'system', pinned: true, topic: 'General discussion', members: [] }),
     createChannel({ org, name: 'alerts', type: 'system', pinned: true, topic: 'System alerts, watchdog events, cron notifications', members: [] }),
   ]);
-  void syncGeneralWithRoster(org);
+  await syncGeneralWithRoster(org);
 }
 
 export async function createAgentChannel(params: { org: string; agentName: string; agentRole?: AgentRole }): Promise<ChannelMeta | null> {
