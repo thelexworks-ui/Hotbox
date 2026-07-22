@@ -1,13 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAccessToken } from '@/lib/fusion/auth';
+import { verifyAccessToken, hashPassword, verifyPassword } from '@/lib/fusion/auth';
 import { db } from '@/lib/fusion/supabase';
 
 export const runtime = 'nodejs';
 
+// Stored as hotbox_keys payload: key_type='user_prefs', key_path=userId, org_id=org UUID
+interface StoredUserPrefs {
+  displayName?: string;
+  avatarColor?: string;
+  phone?: string;
+  timezone?: string;
+  language?: string;
+}
+
+const DEFAULT_COLORS = ['#5ADAEE', '#FFB830', '#4AE88A', '#FF4D4D', '#8B5CF6', '#F97316', '#EC4899', '#3B82F6'];
+
+function extractToken(req: NextRequest): string | null {
+  const cookie = req.cookies.get('hx_access')?.value;
+  if (cookie) return cookie;
+  const auth = req.headers.get('authorization');
+  return auth?.startsWith('Bearer ') ? auth.slice(7) : null;
+}
+
+async function loadUserPrefs(orgId: string, userId: string): Promise<StoredUserPrefs> {
+  const { data } = await db
+    .from('hotbox_keys')
+    .select('payload')
+    .eq('org_id', orgId)
+    .eq('key_type', 'user_prefs')
+    .eq('key_path', userId)
+    .maybeSingle();
+  return (data?.payload as StoredUserPrefs | null) ?? {};
+}
+
+async function saveUserPrefs(orgId: string, userId: string, prefs: StoredUserPrefs): Promise<void> {
+  await db.from('hotbox_keys').upsert(
+    { org_id: orgId, key_type: 'user_prefs', key_path: userId, payload: prefs },
+    { onConflict: 'org_id,key_type,key_path' },
+  );
+}
+
+// GET /api/hotbox/me
 export async function GET(req: NextRequest) {
-  // JWT-only auth — all five aegis-audited fallthrough paths are eliminated:
-  // P2a (no cookie), P2b (catch-through), P2c (member_id falsy), P1 (org null),
-  // P2d (legacy cookie). Each case is now an explicit 401.
   const jwt =
     req.cookies.get('hx_access')?.value ??
     req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
@@ -19,38 +53,47 @@ export async function GET(req: NextRequest) {
   }
   if (!claims.member_id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const [orgRow, userRow] = await Promise.all([
-    db.from('orgs').select('slug').eq('id', claims.org).maybeSingle(),
-    db.from('users').select('email, email_verified_at').eq('id', claims.sub).maybeSingle(),
+  const [orgRow, userRow, agentRow, prefs] = await Promise.all([
+    db.from('orgs').select('id, slug').eq('id', claims.org).maybeSingle(),
+    db.from('users').select('id, email, email_verified_at').eq('id', claims.sub).maybeSingle(),
+    db.from('agent_accounts').select('name').eq('org_id', claims.org).eq('role', 'headmaster').maybeSingle(),
+    loadUserPrefs(claims.org, claims.sub),
   ]);
+
   if (!orgRow.data) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const agentRow = await db
-    .from('agent_accounts')
-    .select('name')
-    .eq('org_id', claims.org)
-    .eq('role', 'headmaster')
-    .maybeSingle();
+  const email = userRow.data?.email ?? '';
+  const name = agentRow.data?.name ?? claims.member_id;
+  const initials = (prefs.displayName ?? name)
+    .split(/\s+/)
+    .map((w: string) => w[0]?.toUpperCase() ?? '')
+    .slice(0, 2)
+    .join('');
 
   return NextResponse.json({
+    // legacy fields (kept for backward compat)
     memberId:        claims.member_id,
     org:             orgRow.data.slug,
     userId:          claims.sub,
     role:            claims.role,
-    name:            agentRow.data?.name ?? null,
-    email:           userRow.data?.email ?? null,
+    name,
+    email,
     emailVerifiedAt: userRow.data?.email_verified_at ?? null,
+    // UserProfile shape
+    id:              claims.sub,
+    displayName:     prefs.displayName ?? name,
+    avatarColor:     prefs.avatarColor ?? DEFAULT_COLORS[claims.sub.charCodeAt(0) % DEFAULT_COLORS.length],
+    avatarInitials:  initials || name.slice(0, 2).toUpperCase(),
+    phone:           prefs.phone ?? '',
+    timezone:        prefs.timezone ?? 'UTC',
+    language:        prefs.language ?? 'en-US',
+    has2FA:          false,
+    createdAt:       userRow.data?.email_verified_at ?? new Date().toISOString(),
   });
 }
 
-function extractToken(req: NextRequest): string | null {
-  const cookieToken = req.cookies.get('hx_access')?.value;
-  if (cookieToken) return cookieToken;
-  const auth = req.headers.get('authorization');
-  if (auth?.startsWith('Bearer ')) return auth.slice(7);
-  return null;
-}
-
+// PATCH /api/hotbox/me
+// Accepts: { displayName?, avatarColor?, phone?, timezone?, language?, email? }
 export async function PATCH(req: NextRequest) {
   const token = extractToken(req);
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -60,62 +103,66 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: { name?: string; email?: string };
+  let body: Record<string, string | undefined>;
   try { body = await req.json(); } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  if (body.name === undefined && body.email === undefined) {
-    return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+  const { displayName, avatarColor, phone, timezone, language, email } = body;
+
+  // Update name in agent_accounts if displayName provided
+  if (displayName !== undefined) {
+    const trimmed = displayName.trim();
+    if (!trimmed) return NextResponse.json({ error: 'displayName cannot be empty' }, { status: 400 });
+    await db.from('agent_accounts').update({ name: trimmed }).eq('org_id', claims.org).eq('role', 'headmaster');
   }
 
-  // name lives in agent_accounts (users table has no name column)
-  if (body.name !== undefined) {
-    const name = body.name.trim();
-    if (!name) return NextResponse.json({ error: 'name cannot be empty' }, { status: 400 });
-    const { error: nameErr } = await db
-      .from('agent_accounts')
-      .update({ name })
-      .eq('org_id', claims.org)
-      .eq('role', 'headmaster');
-    if (nameErr) {
-      console.error('[me:patch] name update failed:', nameErr);
-      return NextResponse.json({ error: 'Failed to update name', detail: nameErr.message }, { status: 500 });
-    }
-  }
-
-  // email lives in users table
-  if (body.email !== undefined) {
-    const email = body.email.trim().toLowerCase();
-    if (!email || !email.includes('@')) {
-      return NextResponse.json({ error: 'invalid email' }, { status: 400 });
-    }
-    const { data: existing } = await db
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .neq('id', claims.sub)
-      .maybeSingle();
+  // Update email in users if provided
+  if (email !== undefined) {
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed.includes('@')) return NextResponse.json({ error: 'Invalid email' }, { status: 400 });
+    const { data: existing } = await db.from('users').select('id').eq('email', trimmed).neq('id', claims.sub).maybeSingle();
     if (existing) return NextResponse.json({ error: 'Email already in use' }, { status: 409 });
-    const { error: emailErr } = await db
-      .from('users')
-      .update({ email, email_verified_at: null })
-      .eq('id', claims.sub);
-    if (emailErr) {
-      console.error('[me:patch] email update failed:', emailErr);
-      return NextResponse.json({ error: 'Failed to update email', detail: emailErr.message }, { status: 500 });
-    }
+    await db.from('users').update({ email: trimmed, email_verified_at: null }).eq('id', claims.sub);
   }
 
-  const [userRow, agentRow] = await Promise.all([
+  // Update extended prefs in hotbox_keys
+  if (avatarColor !== undefined || phone !== undefined || timezone !== undefined || language !== undefined || displayName !== undefined) {
+    const existing = await loadUserPrefs(claims.org, claims.sub);
+    const merged: StoredUserPrefs = {
+      ...existing,
+      ...(displayName !== undefined ? { displayName: displayName.trim() } : {}),
+      ...(avatarColor !== undefined ? { avatarColor } : {}),
+      ...(phone !== undefined ? { phone } : {}),
+      ...(timezone !== undefined ? { timezone } : {}),
+      ...(language !== undefined ? { language } : {}),
+    };
+    await saveUserPrefs(claims.org, claims.sub, merged);
+  }
+
+  // Return updated profile
+  const [userRow, agentRow, prefs] = await Promise.all([
     db.from('users').select('email, email_verified_at').eq('id', claims.sub).maybeSingle(),
     db.from('agent_accounts').select('name').eq('org_id', claims.org).eq('role', 'headmaster').maybeSingle(),
+    loadUserPrefs(claims.org, claims.sub),
   ]);
+
+  const name = agentRow.data?.name ?? '';
+  const initials = (prefs.displayName ?? name)
+    .split(/\s+/)
+    .map((w: string) => w[0]?.toUpperCase() ?? '')
+    .slice(0, 2)
+    .join('');
 
   return NextResponse.json({
     ok: true,
-    name:            agentRow.data?.name ?? null,
-    email:           userRow.data?.email ?? null,
+    displayName:    prefs.displayName ?? name,
+    avatarColor:    prefs.avatarColor ?? DEFAULT_COLORS[claims.sub.charCodeAt(0) % DEFAULT_COLORS.length],
+    avatarInitials: initials || name.slice(0, 2).toUpperCase(),
+    phone:          prefs.phone ?? '',
+    timezone:       prefs.timezone ?? 'UTC',
+    language:       prefs.language ?? 'en-US',
+    email:          userRow.data?.email ?? '',
     emailVerifiedAt: userRow.data?.email_verified_at ?? null,
   });
 }
