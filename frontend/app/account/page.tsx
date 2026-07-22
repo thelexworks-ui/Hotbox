@@ -2,8 +2,10 @@
 
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
+import { useAuth } from '@/components/hotbox/AuthProvider'
 
 function TopNav() {
+  const { logout } = useAuth()
   return (
     <nav className="hx-nav h-12 flex items-center px-4 gap-3 shrink-0">
       <Link href="/dashboard" className="flex items-center gap-2">
@@ -18,6 +20,12 @@ function TopNav() {
       <Link href="/dashboard" className="text-[rgba(232,244,248,0.40)] text-xs font-mono hover:text-[rgba(232,244,248,0.70)] transition-colors">
         ← Dashboard
       </Link>
+      <button
+        onClick={() => void logout()}
+        className="text-[rgba(232,244,248,0.35)] text-xs font-mono hover:text-[rgba(255,77,77,0.80)] transition-colors"
+      >
+        Sign out
+      </button>
     </nav>
   )
 }
@@ -50,6 +58,7 @@ export default function AccountPage() {
   const [displayName,   setDisplayName]   = useState('')
   const [email,         setEmail]         = useState('')
   const [emailVerified, setEmailVerified] = useState(false)
+  const [editEmail,     setEditEmail]     = useState('')
   const [profileSaved,  setProfileSaved]  = useState(false)
   const [profileError,  setProfileError]  = useState<string | null>(null)
   const [profileLoading, setProfileLoading] = useState(false)
@@ -73,6 +82,7 @@ export default function AccountPage() {
         if (d) {
           setDisplayName(d.name ?? '')
           setEmail(d.email ?? '')
+          setEditEmail(d.email ?? '')
           setEmailVerified(!!d.emailVerifiedAt)
         }
       })
@@ -91,10 +101,12 @@ export default function AccountPage() {
     setProfileError(null)
     setProfileLoading(true)
     try {
+      const patch: { name?: string; email?: string } = { name: displayName.trim() }
+      if (editEmail.trim() && editEmail.trim() !== email) patch.email = editEmail.trim()
       const res = await fetch('/api/hotbox/me', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: displayName.trim() }),
+        body: JSON.stringify(patch),
       })
       if (res.ok) {
         setProfileSaved(true)
@@ -170,16 +182,27 @@ export default function AccountPage() {
               <label className="block text-[rgba(232,244,248,0.60)] text-xs font-mono uppercase tracking-widest mb-2">
                 Email
               </label>
-              <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[rgba(5,12,20,0.40)] border border-[rgba(90,218,238,0.10)]">
-                <span className="text-[rgba(232,244,248,0.55)] text-sm font-mono truncate" data-testid="account-email">{email || '—'}</span>
-                {emailVerified && (
-                  <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[rgba(90,218,238,0.08)] border border-[rgba(90,218,238,0.18)] shrink-0">
+              <div className="relative">
+                <input
+                  type="email"
+                  name="email"
+                  autoComplete="email"
+                  value={editEmail}
+                  onChange={e => { setEditEmail(e.target.value); setProfileSaved(false) }}
+                  className="hx-input w-full rounded-lg px-4 py-3 text-sm"
+                  placeholder="you@example.com"
+                  data-testid="account-email"
+                />
+                {emailVerified && editEmail === email && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[rgba(90,218,238,0.08)] border border-[rgba(90,218,238,0.18)]">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#5ADAEE]" />
                     <span className="text-[#5ADAEE] text-[10px] font-mono">Verified</span>
                   </span>
                 )}
               </div>
-              <p className="text-[rgba(232,244,248,0.25)] text-xs font-mono mt-1.5">Email cannot be changed after verification.</p>
+              {editEmail !== email && (
+                <p className="text-[rgba(232,244,248,0.35)] text-xs font-mono mt-1.5">Changing email will require re-verification.</p>
+              )}
             </div>
 
             {profileError && <p className="text-[#FF4D4D] text-xs px-1">{profileError}</p>}
