@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { storeChannelKey, storeChannelMembers, hasChannelKey } from '@/lib/hotbox/keys-store';
 import { requireEmailVerified } from '@/lib/fusion/require-verified';
 import { verifyAccessToken } from '@/lib/fusion/auth';
+import { db } from '@/lib/fusion/supabase';
 
 export const runtime = 'nodejs';
 
@@ -16,17 +17,33 @@ const DEFAULT_CHANNELS = (org: string, now: string) => [
 ];
 
 export async function GET(req: NextRequest) {
-  const org = req.nextUrl.searchParams.get('org') ?? DEFAULT_ORG;
   const masterRole = validateMasterKey(req.headers.get('x-master-key'));
 
-  // Auth: master-key callers (adapters) bypass; all other callers require a valid session.
+  // Auth + org scope.
+  // Master-key callers (adapters/orchestrator) are trusted server-side — use ?org param as-is.
+  // JWT callers: derive org slug from token (UUID → orgs.slug) so ?org param cannot be forged.
   let memberId: string | null = null;
-  if (!masterRole) {
+  let org: string;
+
+  if (masterRole) {
+    org = req.nextUrl.searchParams.get('org') ?? DEFAULT_ORG;
+  } else {
     const jwt = req.cookies.get('hx_access')?.value;
     if (jwt) {
-      try { memberId = (await verifyAccessToken(jwt)).member_id ?? null; } catch { /* expired */ }
+      try {
+        const claims = await verifyAccessToken(jwt);
+        memberId = claims.member_id ?? null;
+        // Resolve org UUID → slug so the caller cannot inject a cross-org ?org param.
+        const { data: orgRow } = await db.from('orgs').select('slug').eq('id', claims.org).maybeSingle();
+        org = orgRow?.slug ?? DEFAULT_ORG;
+      } catch {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    } else {
+      // Legacy cookie path (pre-fusion): fall back to ?org param but still require member identity.
+      memberId = req.cookies.get('hotbox-member-id')?.value ?? null;
+      org = req.nextUrl.searchParams.get('org') ?? DEFAULT_ORG;
     }
-    memberId ??= req.cookies.get('hotbox-member-id')?.value ?? null;
     if (!memberId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
