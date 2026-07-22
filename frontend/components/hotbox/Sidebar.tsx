@@ -245,7 +245,7 @@ export function Sidebar({ onItemClick, onNeuralLink }: { onItemClick?: () => voi
   // CH3: refetch channels (also triggered by refreshKey for CH4)
   const refetchChannels = useCallback(async () => {
     try {
-      const res = await fetch(`/api/hotbox/channels?org=${ORG}`);
+      const res = await fetch('/api/hotbox/channels');
       if (!res.ok) { console.error('[sidebar] channels fetch failed:', res.status); return; }
       const data = await res.json();
       if (Array.isArray(data)) setChannels(data);
@@ -258,8 +258,8 @@ export function Sidebar({ onItemClick, onNeuralLink }: { onItemClick?: () => voi
 
   useEffect(() => {
     fetch('/api/hotbox/presence')
-      .then((r) => r.json())
-      .then((data: Record<string, PresenceStatus>) => {
+      .then((r) => { if (!r.ok) return; return r.json(); })
+      .then((data: Record<string, PresenceStatus> | undefined) => {
         if (data && typeof data === 'object') {
           Object.entries(data).forEach(([agent, status]) => setPresence(agent, status));
         }
