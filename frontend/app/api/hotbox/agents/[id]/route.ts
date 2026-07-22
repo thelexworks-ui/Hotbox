@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/fusion/supabase';
 import { listChannels } from '@/lib/hotbox/channel-service';
 import { presenceMap } from '@/lib/hotbox/presence';
+import { resolveAuthScope } from '@/lib/hotbox/auth-scope';
 
 export const runtime = 'nodejs';
 
-const DEFAULT_ORG = process.env.HOTBOX_ORG ?? 'toadsage';
 const FALLBACK_AGENTS = ['headmaster', 'boss', 'apollo', 'hepha-web'];
 
 // Mirror /members member-set resolution so the same slugs resolve here.
@@ -29,8 +29,11 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const scope = await resolveAuthScope(req);
+  if (!scope.ok) return scope.response;
+
   const { id } = params;
-  const org = req.nextUrl.searchParams.get('org') ?? DEFAULT_ORG;
+  const org = scope.org;
 
   if (id.startsWith('ghost-')) return NextResponse.json({ error: 'not found' }, { status: 404 });
 

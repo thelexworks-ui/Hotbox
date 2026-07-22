@@ -1,19 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listChannels } from '@/lib/hotbox/channel-service';
+import { resolveAuthScope } from '@/lib/hotbox/auth-scope';
 
 export const runtime = 'nodejs';
 
-const DEFAULT_ORG = process.env.HOTBOX_ORG ?? 'toadsage';
-
-// Well-known agents for this org, overridable via HOTBOX_KNOWN_AGENTS (comma-separated).
-// This fallback ensures the member picker is never empty on a fresh deployment before
-// any agent channels exist. HOTBOX_MEMBER_ID seeds the primary human user.
 const FALLBACK_AGENTS = ['headmaster', 'boss', 'apollo', 'hepha-web'];
 
 export async function GET(req: NextRequest) {
-  const org = req.nextUrl.searchParams.get('org') ?? DEFAULT_ORG;
+  const scope = await resolveAuthScope(req);
+  if (!scope.ok) return scope.response;
   try {
-    const channels = await listChannels(org);
+    const channels = await listChannels(scope.org);
     const memberSet = new Set<string>();
 
     // Derive from channel roster
