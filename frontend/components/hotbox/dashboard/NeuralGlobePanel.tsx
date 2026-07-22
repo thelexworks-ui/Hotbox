@@ -115,7 +115,8 @@ function PlusIcon({ size }: { size: number }) {
 
 function NeuralGlobeOverlay() {
   return (
-    <>
+    // Desktop-only overlay chrome — hidden on mobile to avoid collision with NeuralGlobe's own internal buttons
+    <div className="hidden md:contents">
       {/* Online count — top left */}
       <NeuralGlobeOnlineCount />
 
@@ -159,7 +160,7 @@ function NeuralGlobeOverlay() {
 
       {/* Zoom controls — bottom right */}
       <ZoomControls />
-    </>
+    </div>
   );
 }
 

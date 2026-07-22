@@ -88,7 +88,8 @@ function MobileTabBar({ onOpenDrawer }: { onOpenDrawer(): void }) {
   const router   = useRouter();
 
   const handleTab = (action: TabItem['action']) => {
-    if (action === 'dms') { router.push('/dm'); return; }
+    if (action === 'home') { router.push('/dashboard'); return; }
+    if (action === 'dms')  { router.push('/dm'); return; }
     onOpenDrawer();
   };
 
