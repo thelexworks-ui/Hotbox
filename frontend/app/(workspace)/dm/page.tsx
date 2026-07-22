@@ -115,12 +115,13 @@ function TypingDots() {
 
 type Filter = 'all' | 'starred' | 'unreads' | 'external';
 
-const FILTERS: { id: Filter; label: string }[] = [
-  { id: 'all',      label: 'All' },
-  { id: 'starred',  label: 'Starred' },
-  { id: 'unreads',  label: 'Unreads' },
-  { id: 'external', label: 'External' },
-];
+const FILTER_IDS: Filter[] = ['all', 'starred', 'unreads', 'external'];
+const FILTER_LABEL: Record<Filter, string> = {
+  all:      'All',
+  starred:  'Starred',
+  unreads:  'Unreads',
+  external: 'External',
+};
 
 // ── Compose DM sheet ──────────────────────────────────────────────────────────
 
@@ -310,19 +311,20 @@ export default function DmInboxPage() {
 
       {/* Filter chips */}
       <div className="flex gap-2 px-4 py-2.5 overflow-x-auto scrollbar-none flex-shrink-0">
-        {FILTERS.map((f) => (
+        {FILTER_IDS.map((id) => (
           <button
-            key={f.id}
-            onClick={() => setFilter(f.id)}
+            key={id}
+            data-testid={`dm-filter-${id}`}
+            onClick={() => setFilter(id)}
             className="flex items-center px-3 py-1.5 rounded-full text-xs flex-shrink-0 transition-colors border"
             style={{
               fontFamily: "'JetBrains Mono', monospace",
-              ...(filter === f.id
+              ...(filter === id
                 ? { background: 'rgba(90,218,238,0.15)', borderColor: 'rgba(90,218,238,0.50)', color: '#5ADAEE' }
                 : { background: 'transparent', borderColor: 'rgba(232,244,248,0.12)', color: 'rgba(232,244,248,0.50)' }),
             }}
           >
-            {f.label}
+            {FILTER_LABEL[id]}
           </button>
         ))}
       </div>
