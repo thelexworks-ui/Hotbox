@@ -4,6 +4,7 @@ import { validateMasterKey } from '@/lib/hotbox/master-key';
 import { randomBytes } from 'node:crypto';
 import { storeChannelKey, storeChannelMembers, hasChannelKey } from '@/lib/hotbox/keys-store';
 import { requireEmailVerified } from '@/lib/fusion/require-verified';
+import { resolveAuthScope } from '@/lib/hotbox/auth-scope';
 import { verifyAccessToken } from '@/lib/fusion/auth';
 import { db } from '@/lib/fusion/supabase';
 
@@ -40,9 +41,9 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
     } else {
-      // Legacy cookie path (pre-fusion): fall back to ?org param but still require member identity.
+      // Legacy cookie path (pre-fusion): pin to DEFAULT_ORG — never allow ?org injection.
       memberId = req.cookies.get('hotbox-member-id')?.value ?? null;
-      org = req.nextUrl.searchParams.get('org') ?? DEFAULT_ORG;
+      org = DEFAULT_ORG;
     }
     if (!memberId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -69,11 +70,16 @@ export async function POST(req: NextRequest) {
   const denied = await requireEmailVerified(req);
   if (denied) return denied;
 
+  // Derive org from JWT claims — ignore body.org to prevent cross-org write injection.
+  const scope = await resolveAuthScope(req);
+  if (!scope.ok) return scope.response;
+
   const body = await req.json() as {
-    org?: string; name: string; type: string; topic?: string;
+    name: string; type: string; topic?: string;
     members?: string[]; memberIds?: string[];
   };
-  const { org = DEFAULT_ORG, name, type, topic } = body;
+  const { name, type, topic } = body;
+  const org = scope.org;
   // Modal sends memberIds; server-to-server callers may send members — accept both
   const memberList = body.memberIds ?? body.members ?? [];
 

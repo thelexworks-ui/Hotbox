@@ -27,8 +27,8 @@ export async function resolveAuthScope(req: NextRequest, fallbackOrg?: string): 
       if (!memberId) return { ok: false, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
       // Resolve org UUID → slug so caller cannot inject cross-org scope via ?org param.
       const { data: orgRow } = await db.from('orgs').select('slug').eq('id', claims.org).maybeSingle();
-      const org = orgRow?.slug ?? DEFAULT_ORG;
-      return { ok: true, masterRole: null, memberId, org };
+      if (!orgRow?.slug) return { ok: false, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+      return { ok: true, masterRole: null, memberId, org: orgRow.slug };
     } catch {
       return { ok: false, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
     }
