@@ -33,6 +33,7 @@ const NAV_ITEMS = [
   { icon: '⬡', label: 'Dashboard', href: '/dashboard' },
   { icon: '#', label: 'Channels',   href: '/channels' },
   { icon: '✉', label: 'DMs',        href: '/dm' },
+  { icon: '⚙', label: 'Account',   href: '/account' },
 ];
 
 function NavItem({ icon, label, href, active, collapsed }: {
