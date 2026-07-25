@@ -74,11 +74,10 @@ export default function DashboardPage() {
 
         {/* Mobile sidebar drawer */}
         {mobileSidebarOpen && (
-          <div className="md:hidden fixed inset-0 z-50 flex">
+          <div className="md:hidden fixed inset-0 z-50 flex" onClick={(e) => { if (e.target === e.currentTarget) setMobileSidebarOpen(false); }}>
             <div
               className="absolute inset-0"
-              style={{ background: 'rgba(5,12,20,0.60)', backdropFilter: 'blur(4px)' }}
-              onClick={() => setMobileSidebarOpen(false)}
+              style={{ background: 'rgba(5,12,20,0.60)', backdropFilter: 'blur(4px)', pointerEvents: 'none' }}
             />
             <aside
               className="relative z-10 flex flex-col h-full"

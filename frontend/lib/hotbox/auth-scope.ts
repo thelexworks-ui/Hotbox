@@ -35,10 +35,11 @@ export async function resolveAuthScope(req: NextRequest, fallbackOrg?: string): 
   }
 
   // Legacy cookie path (pre-fusion invite-code login).
-  // Only honour an explicitly-set cookie value — never synthesise a member identity.
+  // If only the legacy cookie is present (no JWT), the org cannot be trusted —
+  // any cookie value would silently land in DEFAULT_ORG. Force a fresh login instead.
   const memberId = req.cookies.get('hotbox-member-id')?.value ?? null;
   if (memberId) {
-    return { ok: true, masterRole: null, memberId, org: fallbackOrg ?? DEFAULT_ORG };
+    return { ok: false, response: NextResponse.redirect(new URL('/login', req.url)) };
   }
 
   return { ok: false, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };

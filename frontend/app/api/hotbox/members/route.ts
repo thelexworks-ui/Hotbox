@@ -11,11 +11,11 @@ export async function GET(req: NextRequest) {
     const channels = await listChannels(scope.org);
     const memberSet = new Set<string>();
 
-    // Derive from channel roster
+    // Derive from channel roster (exclude smoke handles)
     for (const ch of channels) {
-      if (ch.agent_name) memberSet.add(ch.agent_name);
-      if (ch.id.startsWith('agent-')) memberSet.add(ch.id.slice('agent-'.length));
-      for (const m of ch.members ?? []) memberSet.add(m);
+      if (ch.agent_name && !ch.agent_name.startsWith('smk')) memberSet.add(ch.agent_name);
+      if (ch.id.startsWith('agent-') && !ch.id.slice('agent-'.length).startsWith('smk')) memberSet.add(ch.id.slice('agent-'.length));
+      for (const m of ch.members ?? []) { if (!m.startsWith('smk')) memberSet.add(m); }
     }
 
     // Deployment-specific env seeds (optional; never fall back to a hardcoded list)

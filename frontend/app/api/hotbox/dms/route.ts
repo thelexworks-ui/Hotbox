@@ -33,7 +33,11 @@ export async function GET(req: NextRequest) {
 
   const allChannels = await listChannels(scope.org);
   const dmChannels = allChannels.filter(
-    (c) => c.type === 'dm' && c.members.includes(scope.memberId!),
+    (c) =>
+      c.type === 'dm' &&
+      c.members.includes(scope.memberId!) &&
+      // Exclude smoke-handle peers (smk*) from all orgs — defense-in-depth against hygiene leaks
+      !c.members.some((m) => m !== scope.memberId! && m.startsWith('smk')),
   );
 
   if (dmChannels.length === 0) return NextResponse.json({ threads: [] });
