@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { SettingsSection, SettingsRow, SettingsToggle, SettingsBanner, SettingsSkeleton } from '@/components/settings/shared';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -401,6 +402,7 @@ function ApiTokenReveal({ token, agentName, onDismiss }: { token: string; agentN
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AgentsSettingsPage() {
+  const router = useRouter();
   const [prefs, setPrefs] = useState<AgentPrefs>(DEFAULTS);
   const [agents, setAgents] = useState<Member[]>([]);
   const [orgAgents, setOrgAgents] = useState<OrgAgent[]>([]);
@@ -535,6 +537,13 @@ export default function AgentsSettingsPage() {
                   <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'var(--hotbox-surface-2)', color: 'var(--hotbox-text-dim)' }}>
                     {a.email.split('@')[1]}
                   </span>
+                  <button
+                    onClick={() => router.push(`/settings/agents/${a.id}/brief`)}
+                    className="text-[11px] px-2 py-0.5 rounded-[6px] transition-colors"
+                    style={{ color: 'var(--hotbox-text-muted)', border: '1px solid var(--hotbox-border)' }}
+                  >
+                    Brief →
+                  </button>
                 </div>
               ))}
             </div>
