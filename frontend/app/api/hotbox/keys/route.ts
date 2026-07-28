@@ -8,13 +8,12 @@ export const runtime = 'nodejs';
 const DEFAULT_ORG = process.env.HOTBOX_ORG ?? 'toadsage';
 
 export async function GET(req: NextRequest) {
-  // Accept hx_access JWT (new auth) or legacy hotbox-member-id cookie.
+  // Require hx_access JWT — bare hotbox-member-id cookie is rejected (security: CVE-G).
   let memberId: string | null = null;
   const jwt = req.cookies.get('hx_access')?.value;
   if (jwt) {
     try { memberId = (await verifyAccessToken(jwt)).member_id ?? null; } catch { /* expired */ }
   }
-  memberId ??= req.cookies.get('hotbox-member-id')?.value ?? null;
   if (!memberId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
