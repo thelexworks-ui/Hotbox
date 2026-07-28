@@ -58,6 +58,8 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  if (!claims.org) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   if (claims.role !== 'headmaster') {
     return NextResponse.json({ error: 'Forbidden — headmaster only' }, { status: 403 });
   }
