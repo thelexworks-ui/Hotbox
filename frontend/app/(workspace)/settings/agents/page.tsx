@@ -34,6 +34,21 @@ interface Member {
   role: string;
 }
 
+interface OrgAgent {
+  id: string;
+  name: string;
+  role: string;
+  email: string;
+  llm_provider: string | null;
+  llm_model: string | null;
+  created_at: string;
+}
+
+interface Channel {
+  id: string;
+  name: string;
+}
+
 const DEFAULTS: AgentPrefs = {
   defaultResponseMode: 'immediate',
   agentVisibilityOnGlobe: true,
@@ -46,6 +61,20 @@ const DEFAULT_CAP: AgentCapabilities = {
   canCreateTasks: false,
   canInviteToChannels: false,
 };
+
+const LLM_PROVIDERS = [
+  { id: 'anthropic', label: 'Anthropic' },
+  { id: 'openai',    label: 'OpenAI' },
+  { id: 'xai',       label: 'xAI (Grok)' },
+  { id: 'google',    label: 'Google Gemini' },
+] as const;
+
+const AGENT_ROLES = [
+  { id: 'agent',       label: 'Agent' },
+  { id: 'orchestrator',label: 'Orchestrator' },
+  { id: 'analyst',     label: 'Analyst' },
+  { id: 'worker',      label: 'Worker' },
+] as const;
 
 // ── Radio group ───────────────────────────────────────────────────────────────
 
@@ -132,27 +161,16 @@ function AgentOverrideRow({
       className="border-b border-[rgba(26,74,90,0.25)] last:border-0 py-3"
       style={{ opacity: saving ? 0.6 : 1, transition: 'opacity 0.15s' }}
     >
-      {/* Header row */}
       <div className="flex items-center gap-3">
-        {/* Avatar */}
         <div
           className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold flex-shrink-0"
           style={{ background: 'var(--hotbox-surface-2)', color: 'var(--hotbox-text-muted)' }}
         >
           {agent.name.slice(0, 2).toUpperCase()}
         </div>
-
-        {/* Name */}
         <span className="flex-1 text-[13px] font-medium text-[var(--hotbox-text)]">{agent.name}</span>
-
-        {/* Compact toggles */}
         <span className="text-[11px] text-[var(--hotbox-text-dim)] mr-1">DMs</span>
-        <SettingsToggle
-          checked={override.canDMMe}
-          onChange={(v) => patch({ canDMMe: v })}
-        />
-
-        {/* Expand capabilities */}
+        <SettingsToggle checked={override.canDMMe} onChange={(v) => patch({ canDMMe: v })} />
         <button
           onClick={() => setExpanded((e) => !e)}
           className="ml-2 text-[11px] text-[var(--hotbox-text-muted)] hover:text-[var(--hotbox-text)] transition-colors px-2 py-0.5 rounded"
@@ -162,35 +180,20 @@ function AgentOverrideRow({
         </button>
       </div>
 
-      {/* Expanded section */}
       {expanded && (
         <div className="ml-10 mt-3 space-y-3">
-          {/* Quiet hours */}
           <div>
             <div className="flex items-center gap-3 mb-2">
               <span className="text-[12px] text-[var(--hotbox-text-muted)] flex-1">Quiet hours</span>
-              <SettingsToggle
-                checked={override.quietHoursEnabled}
-                onChange={(v) => patch({ quietHoursEnabled: v })}
-              />
+              <SettingsToggle checked={override.quietHoursEnabled} onChange={(v) => patch({ quietHoursEnabled: v })} />
             </div>
             {override.quietHoursEnabled && (
               <div className="flex items-center gap-3 mt-1">
-                <TimeInput
-                  label="From"
-                  value={override.quietHoursStart}
-                  onChange={(v) => patch({ quietHoursStart: v })}
-                />
-                <TimeInput
-                  label="To"
-                  value={override.quietHoursEnd}
-                  onChange={(v) => patch({ quietHoursEnd: v })}
-                />
+                <TimeInput label="From" value={override.quietHoursStart} onChange={(v) => patch({ quietHoursStart: v })} />
+                <TimeInput label="To" value={override.quietHoursEnd} onChange={(v) => patch({ quietHoursEnd: v })} />
               </div>
             )}
           </div>
-
-          {/* Capabilities */}
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--hotbox-text-dim)] mb-2">
               Capabilities
@@ -215,31 +218,221 @@ function AgentOverrideRow({
   );
 }
 
+// ── New Agent Form ────────────────────────────────────────────────────────────
+
+function NewAgentForm({
+  channels,
+  onCreated,
+  onCancel,
+}: {
+  channels: Channel[];
+  onCreated: (agent: OrgAgent, apiToken: string) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [role, setRole] = useState<string>('agent');
+  const [llmProvider, setLlmProvider] = useState<string>('');
+  const [llmModel, setLlmModel] = useState('');
+  const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const toggleChannel = (id: string) => {
+    setSelectedChannels(prev =>
+      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
+    );
+  };
+
+  const submit = async () => {
+    if (!name.trim()) { setError('Agent name is required'); return; }
+    setSubmitting(true);
+    setError('');
+    try {
+      const res = await fetch('/api/agents/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          role,
+          llm_provider: llmProvider || undefined,
+          llm_model: llmModel.trim() || undefined,
+          channelIds: selectedChannels,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? 'Failed to create agent'); return; }
+      onCreated(
+        { id: data.agentId, name: name.trim(), role, email: data.email, llm_provider: llmProvider || null, llm_model: llmModel.trim() || null, created_at: new Date().toISOString() },
+        data.apiToken,
+      );
+    } catch {
+      setError('Network error — please try again');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const inputClass = 'w-full px-3 py-2 rounded-[8px] text-[13px] text-[var(--hotbox-text)] focus:outline-none focus:ring-2 focus:ring-[var(--hotbox-accent)]';
+  const inputStyle = { background: 'var(--hotbox-bg)', border: '1px solid var(--hotbox-border)' };
+
+  return (
+    <div className="p-5 rounded-[12px] mt-4" style={{ background: 'var(--hotbox-surface-2)', border: '1px solid var(--hotbox-border)' }}>
+      <h3 className="text-[14px] font-semibold text-[var(--hotbox-text)] mb-4">New Agent</h3>
+
+      {error && <SettingsBanner type="error" message={error} />}
+
+      <div className="space-y-4">
+        <div>
+          <label className="block text-[11px] text-[var(--hotbox-text-muted)] mb-1">Name <span style={{ color: 'var(--hotbox-crashed)' }}>*</span></label>
+          <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Sales Agent" className={inputClass} style={inputStyle} />
+        </div>
+
+        <div>
+          <label className="block text-[11px] text-[var(--hotbox-text-muted)] mb-1">Role</label>
+          <select value={role} onChange={e => setRole(e.target.value)} className={inputClass} style={inputStyle}>
+            {AGENT_ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-[11px] text-[var(--hotbox-text-muted)] mb-1">LLM Provider</label>
+          <select value={llmProvider} onChange={e => setLlmProvider(e.target.value)} className={inputClass} style={inputStyle}>
+            <option value="">None / inherit org default</option>
+            {LLM_PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+          </select>
+        </div>
+
+        {llmProvider && (
+          <div>
+            <label className="block text-[11px] text-[var(--hotbox-text-muted)] mb-1">Model (optional)</label>
+            <input type="text" value={llmModel} onChange={e => setLlmModel(e.target.value)} placeholder="e.g. claude-sonnet-5" className={inputClass} style={inputStyle} />
+          </div>
+        )}
+
+        {channels.filter(c => c.id !== 'general').length > 0 && (
+          <div>
+            <label className="block text-[11px] text-[var(--hotbox-text-muted)] mb-2">
+              Additional channels <span className="text-[var(--hotbox-text-dim)]">(#general is always included)</span>
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {channels.filter(c => c.id !== 'general').map(ch => (
+                <button
+                  key={ch.id}
+                  type="button"
+                  onClick={() => toggleChannel(ch.id)}
+                  className="px-3 py-1 rounded-full text-[12px] transition-all"
+                  style={{
+                    background: selectedChannels.includes(ch.id) ? 'var(--hotbox-accent)' : 'var(--hotbox-surface)',
+                    color: selectedChannels.includes(ch.id) ? 'var(--hotbox-accent-fg, #000)' : 'var(--hotbox-text-muted)',
+                    border: '1px solid var(--hotbox-border)',
+                  }}
+                >
+                  {ch.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="flex gap-2 mt-5">
+        <button
+          onClick={submit}
+          disabled={submitting || !name.trim()}
+          className="px-4 py-2 rounded-[8px] text-[13px] font-semibold transition-opacity disabled:opacity-40"
+          style={{ background: 'var(--hotbox-accent)', color: 'var(--hotbox-accent-fg, #000)' }}
+        >
+          {submitting ? 'Creating…' : 'Create Agent'}
+        </button>
+        <button
+          onClick={onCancel}
+          className="px-4 py-2 rounded-[8px] text-[13px] text-[var(--hotbox-text-muted)] transition-colors hover:text-[var(--hotbox-text)]"
+          style={{ background: 'var(--hotbox-surface)', border: '1px solid var(--hotbox-border)' }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── API Token reveal ──────────────────────────────────────────────────────────
+
+function ApiTokenReveal({ token, agentName, onDismiss }: { token: string; agentName: string; onDismiss: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = () => {
+    navigator.clipboard.writeText(token).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="p-5 rounded-[12px] mt-4" style={{ background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.2)' }}>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[13px] font-semibold" style={{ color: 'var(--hotbox-green, #34d399)' }}>✓ {agentName} created</span>
+      </div>
+      <p className="text-[12px] text-[var(--hotbox-text-muted)] mb-3">
+        Save this API token now — it will not be shown again.
+      </p>
+      <div className="flex gap-2">
+        <code
+          className="flex-1 px-3 py-2 rounded-[8px] text-[11px] font-mono overflow-x-auto"
+          style={{ background: 'var(--hotbox-bg)', border: '1px solid var(--hotbox-border)', color: 'var(--hotbox-text)' }}
+        >
+          {token}
+        </code>
+        <button
+          onClick={copy}
+          className="px-3 py-2 rounded-[8px] text-[12px] font-semibold flex-shrink-0 transition-all"
+          style={{ background: 'var(--hotbox-accent)', color: 'var(--hotbox-accent-fg, #000)' }}
+        >
+          {copied ? 'Copied!' : 'Copy'}
+        </button>
+      </div>
+      <button onClick={onDismiss} className="mt-3 text-[11px] text-[var(--hotbox-text-dim)] hover:text-[var(--hotbox-text-muted)] transition-colors">
+        I've saved the token →
+      </button>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AgentsSettingsPage() {
   const [prefs, setPrefs] = useState<AgentPrefs>(DEFAULTS);
   const [agents, setAgents] = useState<Member[]>([]);
+  const [orgAgents, setOrgAgents] = useState<OrgAgent[]>([]);
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [isHeadmaster, setIsHeadmaster] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [globalDirty, setGlobalDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showNewAgentForm, setShowNewAgentForm] = useState(false);
+  const [newToken, setNewToken] = useState<{ token: string; agentName: string } | null>(null);
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/hotbox/me/agent-prefs').then((r) => r.json()),
-      fetch('/api/hotbox/members').then((r) => r.json()),
+      fetch('/api/hotbox/me/agent-prefs').then(r => r.json()),
+      fetch('/api/hotbox/members').then(r => r.json()),
+      fetch('/api/org/agents').then(r => r.json()),
+      fetch('/api/hotbox/channels').then(r => r.json()),
     ])
-      .then(([p, m]) => {
+      .then(([p, m, oa, ch]) => {
         setPrefs({ ...DEFAULTS, ...p });
         setAgents(Array.isArray(m) ? m : []);
+        setOrgAgents(oa.agents ?? []);
+        setIsHeadmaster(oa.callerRole === 'headmaster' || oa.callerRole === 'orchestrator');
+        setChannels(Array.isArray(ch) ? ch : []);
       })
       .catch(() => setError('Failed to load agent preferences.'))
       .finally(() => setLoading(false));
   }, []);
 
   function patchGlobal(update: Partial<AgentPrefs>) {
-    setPrefs((p) => ({ ...p, ...update }));
+    setPrefs(p => ({ ...p, ...update }));
     setGlobalDirty(true);
   }
 
@@ -263,7 +456,7 @@ export default function AgentsSettingsPage() {
 
   const getOverride = useCallback(
     (agentId: string): AgentOverride => {
-      const found = prefs.agentOverrides.find((o) => o.agentId === agentId);
+      const found = prefs.agentOverrides.find(o => o.agentId === agentId);
       return found ?? {
         agentId,
         agentName: agentId,
@@ -281,13 +474,10 @@ export default function AgentsSettingsPage() {
     async (agentId: string, agentName: string, update: Partial<AgentOverride>) => {
       const current = getOverride(agentId);
       const merged = { ...current, ...update, agentId, agentName };
-
-      // Optimistic local update
-      setPrefs((p) => {
-        const overrides = p.agentOverrides.filter((o) => o.agentId !== agentId);
+      setPrefs(p => {
+        const overrides = p.agentOverrides.filter(o => o.agentId !== agentId);
         return { ...p, agentOverrides: [...overrides, merged] };
       });
-
       await fetch(`/api/hotbox/me/agent-prefs/${agentId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -297,18 +487,86 @@ export default function AgentsSettingsPage() {
     [getOverride],
   );
 
-  if (loading) return <div className="mb-8"><div className="mb-6"><h1 className="text-[22px] font-semibold text-[var(--hotbox-text)]">Agents</h1></div><SettingsSkeleton /></div>;
+  const handleAgentCreated = (agent: OrgAgent, apiToken: string) => {
+    setOrgAgents(prev => [...prev, agent]);
+    setShowNewAgentForm(false);
+    setNewToken({ token: apiToken, agentName: agent.name });
+  };
+
+  if (loading) {
+    return (
+      <div className="mb-8">
+        <h1 className="text-[22px] font-semibold text-[var(--hotbox-text)]">Agents</h1>
+        <SettingsSkeleton />
+      </div>
+    );
+  }
 
   return (
     <div>
       <div className="mb-8">
         <h1 className="text-[22px] font-semibold text-[var(--hotbox-text)]">Agents</h1>
         <p className="text-[13px] text-[var(--hotbox-text-muted)] mt-1">
-          Control how agents interact with you across Hotbox.
+          Manage workspace agents and control how they interact with you.
         </p>
       </div>
 
       {error && <SettingsBanner type="error" message={error} />}
+
+      {/* Workspace Agents — headmaster/orchestrator only */}
+      {isHeadmaster && (
+        <SettingsSection title="Workspace agents">
+          {orgAgents.length === 0 ? (
+            <p className="text-[13px] text-[var(--hotbox-text-dim)] py-2">No agents in this workspace yet.</p>
+          ) : (
+            <div className="flex flex-col gap-2 mb-4">
+              {orgAgents.map(a => (
+                <div key={a.id} className="flex items-center gap-3 py-2 border-b border-[rgba(26,74,90,0.2)] last:border-0">
+                  <div
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold flex-shrink-0"
+                    style={{ background: 'var(--hotbox-surface-2)', color: 'var(--hotbox-text-muted)' }}
+                  >
+                    {a.name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-medium text-[var(--hotbox-text)]">{a.name}</div>
+                    <div className="text-[11px] text-[var(--hotbox-text-dim)]">{a.role}{a.llm_provider ? ` · ${a.llm_provider}` : ''}</div>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'var(--hotbox-surface-2)', color: 'var(--hotbox-text-dim)' }}>
+                    {a.email.split('@')[1]}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!showNewAgentForm && !newToken && (
+            <button
+              onClick={() => setShowNewAgentForm(true)}
+              className="px-4 py-2 rounded-[8px] text-[13px] font-semibold transition-opacity"
+              style={{ background: 'var(--hotbox-accent)', color: 'var(--hotbox-accent-fg, #000)' }}
+            >
+              + New Agent
+            </button>
+          )}
+
+          {showNewAgentForm && (
+            <NewAgentForm
+              channels={channels}
+              onCreated={handleAgentCreated}
+              onCancel={() => setShowNewAgentForm(false)}
+            />
+          )}
+
+          {newToken && (
+            <ApiTokenReveal
+              token={newToken.token}
+              agentName={newToken.agentName}
+              onDismiss={() => setNewToken(null)}
+            />
+          )}
+        </SettingsSection>
+      )}
 
       {/* Global behavior */}
       <SettingsSection title="Global agent behavior">
@@ -319,7 +577,7 @@ export default function AgentsSettingsPage() {
           <div className="w-64">
             <RadioGroup
               value={prefs.defaultResponseMode}
-              onChange={(v) => patchGlobal({ defaultResponseMode: v })}
+              onChange={v => patchGlobal({ defaultResponseMode: v })}
               options={[
                 { value: 'immediate', label: 'Immediate', description: 'Agents DM you as events happen' },
                 { value: 'batched', label: 'Batched', description: 'Agents queue messages, deliver every 15 min' },
@@ -333,20 +591,14 @@ export default function AgentsSettingsPage() {
           label="Show me on Neural Link globe"
           description="Display your presence on the Neural Link visualization."
         >
-          <SettingsToggle
-            checked={prefs.agentVisibilityOnGlobe}
-            onChange={(v) => patchGlobal({ agentVisibilityOnGlobe: v })}
-          />
+          <SettingsToggle checked={prefs.agentVisibilityOnGlobe} onChange={v => patchGlobal({ agentVisibilityOnGlobe: v })} />
         </SettingsRow>
 
         <SettingsRow
           label="Activity feed"
           description="Show agent actions in your sidebar activity feed."
         >
-          <SettingsToggle
-            checked={prefs.activityFeedEnabled}
-            onChange={(v) => patchGlobal({ activityFeedEnabled: v })}
-          />
+          <SettingsToggle checked={prefs.activityFeedEnabled} onChange={v => patchGlobal({ activityFeedEnabled: v })} />
         </SettingsRow>
 
         {globalDirty && (
@@ -355,11 +607,7 @@ export default function AgentsSettingsPage() {
               onClick={saveGlobal}
               disabled={saving}
               className="px-4 py-1.5 rounded-[7px] text-[12px] font-semibold transition-all disabled:opacity-50"
-              style={{
-                background: 'var(--hotbox-amber)',
-                color: 'var(--hotbox-amber-fg)',
-                border: '1px solid transparent',
-              }}
+              style={{ background: 'var(--hotbox-amber)', color: 'var(--hotbox-amber-fg)', border: '1px solid transparent' }}
             >
               {saving ? 'Saving…' : 'Save'}
             </button>
@@ -373,12 +621,12 @@ export default function AgentsSettingsPage() {
           <p className="text-[13px] text-[var(--hotbox-text-dim)] py-4">No agents connected yet.</p>
         ) : (
           <div>
-            {agents.map((agent) => (
+            {agents.map(agent => (
               <AgentOverrideRow
                 key={agent.id}
                 agent={agent}
                 override={getOverride(agent.id)}
-                onSave={(update) => saveOverride(agent.id, agent.name, update)}
+                onSave={update => saveOverride(agent.id, agent.name, update)}
               />
             ))}
           </div>
