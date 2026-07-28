@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/lib/fusion/auth';
 import { db } from '@/lib/fusion/supabase';
 
-export const runtime = 'nodejs';
+export const runtime = 'nodejs'; // nodejs runtime
 
 function extractToken(req: NextRequest): string | null {
   return (
