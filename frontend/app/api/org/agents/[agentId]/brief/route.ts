@@ -94,6 +94,9 @@ export async function PATCH(
   if (typeof body.brief !== 'string') {
     return NextResponse.json({ error: 'brief must be a string' }, { status: 400 });
   }
+  if (body.brief.length > 51200) {
+    return NextResponse.json({ error: 'brief must be under 50KB' }, { status: 400 });
+  }
 
   // Verify agent belongs to caller's org
   const { data: agent, error: agentErr } = await db
