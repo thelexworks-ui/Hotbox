@@ -20,7 +20,7 @@ function db(): SupabaseClient {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type ChannelType = 'system' | 'agent' | 'topic' | 'group' | 'dm';
+export type ChannelType = 'system' | 'agent' | 'topic' | 'group' | 'dm' | 'nexus';
 export type AgentRole = 'orchestrator' | 'analyst' | 'agent';
 
 export interface ChannelMeta {
