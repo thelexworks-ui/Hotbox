@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveAuthScope } from '@/lib/hotbox/auth-scope';
 import { db } from '@/lib/fusion/supabase';
 import { getChannelMeta } from '@/lib/hotbox/channel-service';
-import { getChannelMembers, storeChannelMembers } from '@/lib/hotbox/keys-store';
+import { getChannelMembers, storeChannelMembers, loadChannelKey, storeChannelKey } from '@/lib/hotbox/keys-store';
 
 export const runtime = 'nodejs';
 
@@ -56,6 +56,12 @@ export async function POST(
   const updated = current.includes(callerId) ? current : [...current, callerId];
   if (updated.length !== current.length) {
     await storeChannelMembers(inviterOrg, channelId, updated);
+  }
+
+  // Q2-A: snapshot CK from inviter's org to caller's org at invite time
+  const ck = await loadChannelKey(inviterOrg, channelId);
+  if (ck) {
+    await storeChannelKey(scope.org, channelId, ck);
   }
 
   return NextResponse.json({
