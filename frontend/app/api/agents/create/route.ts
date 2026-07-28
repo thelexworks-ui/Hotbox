@@ -7,22 +7,24 @@ export const runtime = 'nodejs';
 
 const VALID_PROVIDERS = ['anthropic', 'openai', 'xai', 'google'] as const;
 const VALID_ROLES = ['agent', 'orchestrator', 'analyst', 'worker'] as const;
+const NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9 _-]{0,38}$/;
 
 // POST /api/agents/create
 // Body: { name, role?, llm_provider?, llm_model?, channelIds? }
-// Auth: Bearer <accessToken> — headmaster or orchestrator only
+// Auth: hx_access cookie OR Authorization: Bearer <accessToken> — headmaster or orchestrator only
 // Returns: { agentId, apiToken, email }
-// Atomic: rolls back agent_accounts + member_pages on any failure.
+// Note: api_token is stored plaintext (pre-existing pattern — dedicated security PR pending)
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get('authorization') ?? '';
-  const rawToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!rawToken) {
+  const jwt =
+    req.cookies.get('hx_access')?.value ??
+    req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+  if (!jwt) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   let caller: { sub: string; org: string; role: string };
   try {
-    caller = await verifyAccessToken(rawToken);
+    caller = await verifyAccessToken(jwt);
   } catch {
     return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
   }
@@ -45,14 +47,21 @@ export async function POST(req: NextRequest) {
   }
 
   const { name, role = 'agent', llm_provider, llm_model, channelIds = [] } = body;
-  if (!name || typeof name !== 'string' || !name.trim()) {
-    return NextResponse.json({ error: 'name required' }, { status: 400 });
+
+  if (!name || typeof name !== 'string' || !NAME_RE.test(name.trim())) {
+    return NextResponse.json(
+      { error: 'name required — 1-40 chars, alphanumeric/space/underscore/hyphen, must start with alphanumeric' },
+      { status: 400 },
+    );
   }
   if (llm_provider && !VALID_PROVIDERS.includes(llm_provider as typeof VALID_PROVIDERS[number])) {
     return NextResponse.json({ error: `llm_provider must be one of: ${VALID_PROVIDERS.join(', ')}` }, { status: 400 });
   }
   if (!VALID_ROLES.includes(role as typeof VALID_ROLES[number])) {
     return NextResponse.json({ error: `role must be one of: ${VALID_ROLES.join(', ')}` }, { status: 400 });
+  }
+  if (llm_model && (typeof llm_model !== 'string' || llm_model.length > 100)) {
+    return NextResponse.json({ error: 'llm_model must be a string under 100 chars' }, { status: 400 });
   }
 
   const agentName = name.trim();
@@ -102,7 +111,7 @@ export async function POST(req: NextRequest) {
   // Step 3: Add to #general (invariant — fire-and-forget)
   void addMemberToGeneral(org.slug, agentName);
 
-  // Step 4: Add to selected channels
+  // Step 4: Add to selected channels (non-fatal; org.slug binding prevents cross-org injection)
   const extraChannels = (channelIds ?? []).filter(id => id !== 'general');
   for (const channelId of extraChannels) {
     try {
@@ -112,11 +121,10 @@ export async function POST(req: NextRequest) {
       }
     } catch (err) {
       console.error('[agents/create] failed to add agent to channel', channelId, err);
-      // Non-fatal — channel membership can be retried; agent row is committed
     }
   }
 
-  // Step 5: Log spawn event (hepha-web relays to boss at next heartbeat for daemon registration)
+  // Step 5: Log spawn event (non-fatal)
   try {
     await db.from('events').insert({
       org_id: caller.org,
@@ -134,8 +142,11 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error('[agents/create] failed to log spawn event:', err);
-    // Non-fatal
   }
 
-  return NextResponse.json({ agentId: agent.id, apiToken, email }, { status: 201 });
+  const response = NextResponse.json({ agentId: agent.id, apiToken, email }, { status: 201 });
+  // Prevent browser from caching the one-time token in the HTTP response cache
+  response.headers.set('Cache-Control', 'no-store');
+  response.headers.set('Pragma', 'no-cache');
+  return response;
 }
