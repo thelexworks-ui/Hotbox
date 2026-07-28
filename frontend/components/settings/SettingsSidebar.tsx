@@ -134,7 +134,7 @@ const HOTBOX_NAV: NavItem[] = [
 
 const WORKSPACE_NAV: NavItem[] = [
   { tab: 'workspace',    label: 'Workspace',    Icon: IconBuilding },
-  { tab: 'integrations', label: 'Integrations', Icon: IconPuzzle, badge: 'v2' },
+  { tab: 'integrations', label: 'Integrations', Icon: IconPuzzle },
 ];
 
 function SidebarGroup({ title, items }: { title: string; items: NavItem[] }) {
